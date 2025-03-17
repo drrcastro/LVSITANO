@@ -54,4 +54,4 @@ async def on_reaction_remove(reaction, user):
                 print(f"{user.name} perdeu o cargo {role.name}.")
 
 # Substitua com o seu token do bot
-bot.run('BOT_TOKEN')
+bot.run(BOT_TOKEN)
