@@ -5,9 +5,10 @@ from discord.ext import commands
 # Recupera as variáveis de ambiente
 BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))  # O ID do canal deve ser convertido para inteiro
-ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))  # O ID do cargo deve ser convertido para inteiro
+ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))  # O ID do cargo a ser atribuído
+REQUIRE_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))  # O ID do cargo que o usuário deve ter para receber o novo
 
-if BOT_TOKEN is None or CHANNEL_ID is None or ROLE_ID is None:
+if BOT_TOKEN is None or CHANNEL_ID is None or ROLE_ID is None or REQUIRE_ROLE_ID is None:
     print("Erro: uma ou mais variáveis de ambiente não estão definidas corretamente.")
 else:
     intents = discord.Intents.default()
@@ -25,8 +26,16 @@ else:
 
     @bot.event
     async def on_message(message):
-        print(f"Mensagem recebida no canal {message.channel.id}")
+        print(f"Mensagem recebida no canal: {message.channel.id}")
+        
         if message.channel.id == CHANNEL_ID and not message.author.bot:
+            # Remover o cargo de todos os usuários
+            for member in message.guild.members:
+                role = discord.utils.get(member.guild.roles, id=ROLE_ID)
+                if role in member.roles:
+                    await member.remove_roles(role)
+                    print(f"{member.name} perdeu o cargo {role.name}.")
+
             message_reactions[message.id] = set()
 
         await bot.process_commands(message)
@@ -40,13 +49,22 @@ else:
 
             message_reactions[reaction.message.id].add(user.id)
 
-            if all(user.id in reactions for reactions in message_reactions.values()):
-                role = discord.utils.get(user.guild.roles, id=ROLE_ID)
-                if role not in user.roles:
-                    await user.add_roles(role)
-                    print(f"{user.name} recebeu o cargo {role.name}.")
+            # Verifica se o usuário já tem o cargo necessário
+            if any(role.id == REQUIRE_ROLE_ID for role in user.roles):
+                if all(user.id in reactions for reactions in message_reactions.values()):
+                    role = discord.utils.get(user.guild.roles, id=ROLE_ID)
+                    if role not in user.roles:
+                        try:
+                            await user.add_roles(role)
+                            print(f"{user.name} recebeu o cargo {role.name}.")
+                        except discord.Forbidden as e:
+                            print(f"Erro de permissão ao tentar adicionar o cargo: {e}")
+                    else:
+                        print(f"{user.name} já possui o cargo {role.name}.")
                 else:
-                    print(f"{user.name} já possui o cargo {role.name}.")
+                    print(f"{user.name} ainda não reagiu a todas as mensagens.")
+            else:
+                print(f"{user.name} não tem o cargo necessário para receber o novo cargo.")
 
     @bot.event
     async def on_reaction_remove(reaction, user):
