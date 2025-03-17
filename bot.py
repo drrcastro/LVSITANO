@@ -48,6 +48,7 @@ async def on_message(message):
 
 @bot.event
 async def on_reaction_add(reaction, user):
+    print(f'Reação adicionada por {user.name} em {reaction.message.id}')
     if reaction.message.channel.id == CHANNEL_ID and not user.bot:
         if reaction.message.id not in message_reactions:
             message_reactions[reaction.message.id] = set()
@@ -55,8 +56,11 @@ async def on_reaction_add(reaction, user):
         message_reactions[reaction.message.id].add(user.id)
 
         required_role = discord.utils.get(user.guild.roles, id=REQUIRED_ROLE_ID)
-        if required_role: # verificação aqui, antes das reações
+        print(f'Role de requisito encontrado: {required_role}')
+        if required_role:
+            print(f'{user.name} tem o role de requisito')
             if all(user.id in reactions for reactions in message_reactions.values()):
+                print(f'{user.name} reagiu a todas as mensagens')
                 role = discord.utils.get(user.guild.roles, id=ROLE_ID)
                 if role not in user.roles:
                     await user.add_roles(role)
@@ -81,7 +85,7 @@ async def on_member_update(before, after):
     if REQUIRED_ROLE_ID in [role.id for role in after.roles] and REQUIRED_ROLE_ID not in [role.id for role in before.roles]:
         user = after
         required_role = discord.utils.get(user.guild.roles, id=REQUIRED_ROLE_ID)
-        if required_role: # verificação aqui, antes das reações
+        if required_role:
             if all(user.id in reactions for reactions in message_reactions.values()):
                 role = discord.utils.get(user.guild.roles, id=ROLE_ID)
                 if role not in user.roles:
