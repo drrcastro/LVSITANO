@@ -42,7 +42,7 @@ async def on_message(message):
     await bot.process_commands(message)
 
 async def check_reactions_and_apply_role(member, channel, role):
-    messages = await channel.history(limit=None).flatten() #pega todas as mensagens do canal
+    messages = list(await channel.history(limit=None).flatten()) # Corrigido aqui!
     has_reacted_to_all = True
     for msg in messages:
         if not discord.utils.get(msg.reactions, lambda r: discord.utils.get(r.users(), id=member.id)):
