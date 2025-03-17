@@ -7,7 +7,7 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
-REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
+REQUIRED_ROLE_ID = int(os.getenv('DISCORDE_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
 intents = discord.Intents.default()
@@ -48,6 +48,7 @@ async def on_message(message):
 
 @bot.event
 async def on_reaction_add(reaction, user):
+    print(f'Reação adicionada por {user.name} em {reaction.message.id}')
     if reaction.message.channel.id == CHANNEL_ID and not user.bot:
         if reaction.message.id not in message_reactions:
             message_reactions[reaction.message.id] = set()
@@ -55,8 +56,11 @@ async def on_reaction_add(reaction, user):
         message_reactions[reaction.message.id].add(user.id)
 
         required_role = discord.utils.get(user.guild.roles, id=REQUIRED_ROLE_ID)
+        print(f'Role de requisito encontrado: {required_role}')
         if required_role:
+            print(f'{user.name} tem o role de requisito')
             if all(user.id in reactions for reactions in message_reactions.values()):
+                print(f'{user.name} reagiu a todas as mensagens')
                 role = discord.utils.get(user.guild.roles, id=ROLE_ID)
                 if role not in user.roles:
                     await user.add_roles(role)
@@ -66,6 +70,7 @@ async def on_reaction_add(reaction, user):
 
 @bot.event
 async def on_reaction_remove(reaction, user):
+    print(f'Reação removida por {user.name} em {reaction.message.id}')
     if reaction.message.channel.id == CHANNEL_ID and not user.bot:
         if reaction.message.id in message_reactions:
             message_reactions[reaction.message.id].discard(user.id)
