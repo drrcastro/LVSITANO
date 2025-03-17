@@ -48,6 +48,7 @@ async def on_raw_reaction_add(payload):
 
     channel = bot.get_channel(CHANNEL_ID)
     messages = await channel.history(limit=10).flatten()
+    messages = list(messages) # correção aqui
 
     user = bot.get_user(payload.user_id)
     member = channel.guild.get_member(payload.user_id)
