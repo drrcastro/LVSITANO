@@ -1,5 +1,11 @@
-const { Client, Intents } = require('discord.js');
-const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.MESSAGE_REACTIONS] });
+const { Client, GatewayIntentBits } = require('discord.js'); // Alteração aqui
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds, 
+        GatewayIntentBits.GuildMessages, 
+        GatewayIntentBits.MessageReactions
+    ]
+});
 
 const TOKEN = 'SEU_TOKEN_DO_BOT';
 const CHANNEL_ID = 'ID_DO_CANAL_ESPECIFICO';
