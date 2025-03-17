@@ -7,7 +7,7 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
-REQUIRED_ROLE_ID = int(os.getenv('DISCORDE_REQUIRE_ROLE_ID'))
+REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
 intents = discord.Intents.default()
