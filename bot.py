@@ -1,116 +1,74 @@
-import os
 import discord
+import os
 from discord.ext import commands
+from dotenv import load_dotenv
 
-# Recupera as variáveis de ambiente
-BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
-CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))  # O ID do canal deve ser convertido para inteiro
-ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))  # O ID do cargo a ser atribuído
-REQUIRE_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))  # O ID do cargo que o usuário deve ter para receber o novo
+load_dotenv()
 
-if BOT_TOKEN is None or CHANNEL_ID is None or ROLE_ID is None or REQUIRE_ROLE_ID is None:
-    print("Erro: uma ou mais variáveis de ambiente não estão definidas corretamente.")
-else:
-    intents = discord.Intents.default()
-    intents.message_content = True
-    intents.reactions = True
+TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
+REQUIRED_ROLE_ID = int(os.getenv('DISCORDE_REQUIRE_ROLE_ID'))
+CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
-    # Criação da instância do bot
-    bot = commands.Bot(command_prefix="!", intents=intents)
+intents = discord.Intents.default()
+intents.members = True
+intents.message_content = True
+intents.reactions = True
 
-    message_reactions = {}
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-    @bot.event
-    async def on_ready():
-        print(f'Bot {bot.user} está online!')
+@bot.event
+async def on_ready():
+    print(f'Bot conectado como {bot.user}')
 
-    @bot.event
-    async def on_message(message):
-        print(f"Mensagem recebida no canal: {message.channel.id}")
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
 
-        # Verifique se a mensagem é do canal correto
-        if message.channel.id == CHANNEL_ID and not message.author.bot:
-            print(f"Mensagem é do canal monitorado! Removendo cargos de todos os membros...")
+    print(f'Nova mensagem detectada: {message.id}')
 
-            # Remover o cargo de todos os usuários que o possuem
-            for member in message.guild.members:
-                role = discord.utils.get(member.guild.roles, id=ROLE_ID)
-                if role in member.roles:
-                    try:
-                        # Remover o cargo
-                        await member.remove_roles(role)
-                        print(f"{member.name} perdeu o cargo {role.name}.")
-                    except discord.Forbidden as e:
-                        print(f"Erro ao tentar remover o cargo de {member.name}: {e}")
-                        # Verificando se o erro é de permissão
-                        if e.response.status == 403:
-                            print(f"Permissões insuficientes para remover o cargo de {member.name}")
-                    except Exception as e:
-                        print(f"Erro inesperado ao tentar remover o cargo de {member.name}: {e}")
+    guild = message.guild
+    role = guild.get_role(ROLE_ID)
 
-            # Reiniciar as reações para a nova mensagem
-            message_reactions[message.id] = set()
-            print(f"Reações reiniciadas para a mensagem {message.id}")
-
-        await bot.process_commands(message)  # Processa os comandos do bot (caso haja algum comando sendo executado)
-
-    @bot.event
-    async def on_reaction_add(reaction, user):
-        if reaction.message.channel.id == CHANNEL_ID and not user.bot:
-            print(f"Reação adicionada: {user.name} reagiu à mensagem {reaction.message.id}")
-            if reaction.message.id not in message_reactions:
-                message_reactions[reaction.message.id] = set()
-
-            message_reactions[reaction.message.id].add(user.id)
-
-            # Verifica se o usuário já tem o cargo necessário
-            if any(role.id == REQUIRE_ROLE_ID for role in user.roles):
-                if all(user.id in reactions for reactions in message_reactions.values()):
-                    role = discord.utils.get(user.guild.roles, id=ROLE_ID)
-                    if role not in user.roles:
-                        try:
-                            await user.add_roles(role)
-                            print(f"{user.name} recebeu o cargo {role.name}.")
-                        except discord.Forbidden as e:
-                            print(f"Erro de permissão ao tentar adicionar o cargo: {e}")
-                    else:
-                        print(f"{user.name} já possui o cargo {role.name}.")
-                else:
-                    print(f"{user.name} ainda não reagiu a todas as mensagens.")
-            else:
-                print(f"{user.name} não tem o cargo necessário para receber o novo cargo.")
-
-    @bot.event
-    async def on_reaction_remove(reaction, user):
-        if reaction.message.channel.id == CHANNEL_ID and not user.bot:
-            print(f"Reação removida: {user.name} removeu a reação da mensagem {reaction.message.id}")
-            if reaction.message.id in message_reactions:
-                message_reactions[reaction.message.id].discard(user.id)
-
-            if not all(user.id in reactions for reactions in message_reactions.values()):
-                role = discord.utils.get(user.guild.roles, id=ROLE_ID)
-                if role in user.roles:
-                    try:
-                        await user.remove_roles(role)
-                        print(f"{user.name} perdeu o cargo {role.name}.")
-                    except discord.Forbidden as e:
-                        print(f"Erro ao tentar remover o cargo de {user.name}: {e}")
-                    except Exception as e:
-                        print(f"Erro inesperado ao tentar remover o cargo de {user.name}: {e}")
-
-    @bot.command()
-    async def test_remove(ctx, member: discord.Member):
-        """Comando para testar a remoção de cargos manualmente"""
-        role = discord.utils.get(ctx.guild.roles, id=ROLE_ID)
-        if role in member.roles:
-            try:
+    if role:
+        for member in guild.members:
+            if role in member.roles:
                 await member.remove_roles(role)
-                await ctx.send(f"{member.name} perdeu o cargo {role.name}.")
-            except discord.Forbidden as e:
-                await ctx.send(f"Erro ao tentar remover o cargo: {e}")
-            except Exception as e:
-                await ctx.send(f"Erro inesperado: {e}")
-        else:
-            await ctx.send(f"{member.name} não tem o cargo {role.name}.")
+                print(f'Role removido de {member.name}')
+    else:
+        print(f'Role com ID {ROLE_ID} não encontrado')
 
-    bot.run(BOT_TOKEN)
+    await bot.process_commands(message)
+
+@bot.event
+async def on_raw_reaction_add(payload):
+    if payload.channel_id != CHANNEL_ID:
+        return
+
+    channel = bot.get_channel(CHANNEL_ID)
+    messages = await channel.history(limit=10).flatten()
+
+    user = bot.get_user(payload.user_id)
+    member = channel.guild.get_member(payload.user_id)
+
+    if member and bot.user != user:
+        has_reacted_to_all = True
+        for msg in messages:
+            if not discord.utils.get(msg.reactions, emoji=payload.emoji.name):
+                has_reacted_to_all = False
+                break
+
+        if has_reacted_to_all:
+            required_role = discord.utils.get(member.roles, id=REQUIRED_ROLE_ID)
+            if required_role:
+                role_to_reapply = channel.guild.get_role(ROLE_ID)
+                if role_to_reapply:
+                    await member.add_roles(role_to_reapply)
+                    print(f'Role reatribuído a {member.name}')
+                else:
+                    print(f'Role com ID {ROLE_ID} não encontrado')
+            else:
+                print(f'{member.name} não possui o role necessário')
+
+bot.run(TOKEN)
