@@ -48,10 +48,15 @@ async def check_reactions_and_apply_role(member, channel, role):
 
     has_reacted_to_all = True
     for msg in messages:
-        if not discord.utils.get(msg.reactions, lambda r: discord.utils.get(r.users(), id=member.id)):
-            if msg.author != bot.user: #ignora as mensagens do bot
-                has_reacted_to_all = False
+        reacted = False
+        for reaction in msg.reactions:
+            users = await reaction.users().flatten()
+            if member in users:
+                reacted = True
                 break
+        if not reacted and msg.author != bot.user:
+            has_reacted_to_all = False
+            break
 
     if has_reacted_to_all:
         await member.add_roles(role)
