@@ -48,7 +48,6 @@ async def on_message(message):
 
 @bot.event
 async def on_reaction_add(reaction, user):
-    print(f'Reação adicionada por {user.name} em {reaction.message.id}')
     if reaction.message.channel.id == CHANNEL_ID and not user.bot:
         if reaction.message.id not in message_reactions:
             message_reactions[reaction.message.id] = set()
@@ -56,11 +55,8 @@ async def on_reaction_add(reaction, user):
         message_reactions[reaction.message.id].add(user.id)
 
         required_role = discord.utils.get(user.guild.roles, id=REQUIRED_ROLE_ID)
-        print(f'Role de requisito encontrado: {required_role}')
         if required_role:
-            print(f'{user.name} tem o role de requisito')
             if all(user.id in reactions for reactions in message_reactions.values()):
-                print(f'{user.name} reagiu a todas as mensagens')
                 role = discord.utils.get(user.guild.roles, id=ROLE_ID)
                 if role not in user.roles:
                     await user.add_roles(role)
