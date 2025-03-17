@@ -47,29 +47,20 @@ async def on_raw_reaction_add(payload):
         return
 
     channel = bot.get_channel(CHANNEL_ID)
-    messages = await channel.history(limit=10).flatten()
-    messages = list(messages) # correção aqui
 
     user = bot.get_user(payload.user_id)
     member = channel.guild.get_member(payload.user_id)
 
     if member and bot.user != user:
-        has_reacted_to_all = True
-        for msg in messages:
-            if not discord.utils.get(msg.reactions, emoji=payload.emoji.name):
-                has_reacted_to_all = False
-                break
-
-        if has_reacted_to_all:
-            required_role = discord.utils.get(member.roles, id=REQUIRED_ROLE_ID)
-            if required_role:
-                role_to_reapply = channel.guild.get_role(ROLE_ID)
-                if role_to_reapply:
-                    await member.add_roles(role_to_reapply)
-                    print(f'Role reatribuído a {member.name}')
-                else:
-                    print(f'Role com ID {ROLE_ID} não encontrado')
+        required_role = discord.utils.get(member.roles, id=REQUIRED_ROLE_ID)
+        if required_role:
+            role_to_reapply = channel.guild.get_role(ROLE_ID)
+            if role_to_reapply:
+                await member.add_roles(role_to_reapply)
+                print(f'Role reatribuído a {member.name}')
             else:
-                print(f'{member.name} não possui o role necessário')
+                print(f'Role com ID {ROLE_ID} não encontrado')
+        else:
+            print(f'{member.name} não possui o role necessário')
 
 bot.run(TOKEN)
