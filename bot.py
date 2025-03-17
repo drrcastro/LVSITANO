@@ -17,6 +17,7 @@ else:
 
     # Criação da instância do bot
     bot = commands.Bot(command_prefix="!", intents=intents)
+
     message_reactions = {}
 
     @bot.event
@@ -25,17 +26,29 @@ else:
 
     @bot.event
     async def on_message(message):
-        print(f"Mensagem recebida no canal: {message.channel.id}") # Verifique se a mensagem é do canal correto
+        print(f"Mensagem recebida no canal: {message.channel.id}")
+
+        # Verifique se a mensagem é do canal correto
         if message.channel.id == CHANNEL_ID and not message.author.bot:
-            print(f"Mensagem é do canal monitorado! Removendo cargos de todos os membros...") # Remover o cargo de todos os usuários que o possuem
+            print(f"Mensagem é do canal monitorado! Removendo cargos de todos os membros...")
+
+            # Remover o cargo de todos os usuários que o possuem
             for member in message.guild.members:
                 role = discord.utils.get(member.guild.roles, id=ROLE_ID)
                 if role in member.roles:
                     try:
+                        # Remover o cargo
                         await member.remove_roles(role)
                         print(f"{member.name} perdeu o cargo {role.name}.")
                     except discord.Forbidden as e:
-                        print(f"Erro ao tentar remover o cargo de {member.name}: {e}")# Reiniciar as reações para a nova mensagem
+                        print(f"Erro ao tentar remover o cargo de {member.name}: {e}")
+                        # Verificando se o erro é de permissão
+                        if e.response.status == 403:
+                            print(f"Permissões insuficientes para remover o cargo de {member.name}")
+                    except Exception as e:
+                        print(f"Erro inesperado ao tentar remover o cargo de {member.name}: {e}")
+
+            # Reiniciar as reações para a nova mensagem
             message_reactions[message.id] = set()
             print(f"Reações reiniciadas para a mensagem {message.id}")
 
@@ -47,7 +60,10 @@ else:
             print(f"Reação adicionada: {user.name} reagiu à mensagem {reaction.message.id}")
             if reaction.message.id not in message_reactions:
                 message_reactions[reaction.message.id] = set()
-            message_reactions[reaction.message.id].add(user.id) # Verifica se o usuário já tem o cargo necessário
+
+            message_reactions[reaction.message.id].add(user.id)
+
+            # Verifica se o usuário já tem o cargo necessário
             if any(role.id == REQUIRE_ROLE_ID for role in user.roles):
                 if all(user.id in reactions for reactions in message_reactions.values()):
                     role = discord.utils.get(user.guild.roles, id=ROLE_ID)
@@ -79,6 +95,8 @@ else:
                         print(f"{user.name} perdeu o cargo {role.name}.")
                     except discord.Forbidden as e:
                         print(f"Erro ao tentar remover o cargo de {user.name}: {e}")
+                    except Exception as e:
+                        print(f"Erro inesperado ao tentar remover o cargo de {user.name}: {e}")
 
     @bot.command()
     async def test_remove(ctx, member: discord.Member):
@@ -90,6 +108,8 @@ else:
                 await ctx.send(f"{member.name} perdeu o cargo {role.name}.")
             except discord.Forbidden as e:
                 await ctx.send(f"Erro ao tentar remover o cargo: {e}")
+            except Exception as e:
+                await ctx.send(f"Erro inesperado: {e}")
         else:
             await ctx.send(f"{member.name} não tem o cargo {role.name}.")
 
