@@ -7,7 +7,7 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
-REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
+REQUIRED_ROLE_ID = int(os.getenv('DISCORDE_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
 intents = discord.Intents.default()
@@ -55,7 +55,7 @@ async def on_reaction_add(reaction, user):
         message_reactions[reaction.message.id].add(user.id)
 
         required_role = discord.utils.get(user.guild.roles, id=REQUIRED_ROLE_ID)
-        if required_role:
+        if required_role: # verificação aqui, antes das reações
             if all(user.id in reactions for reactions in message_reactions.values()):
                 role = discord.utils.get(user.guild.roles, id=ROLE_ID)
                 if role not in user.roles:
@@ -81,7 +81,7 @@ async def on_member_update(before, after):
     if REQUIRED_ROLE_ID in [role.id for role in after.roles] and REQUIRED_ROLE_ID not in [role.id for role in before.roles]:
         user = after
         required_role = discord.utils.get(user.guild.roles, id=REQUIRED_ROLE_ID)
-        if required_role:
+        if required_role: # verificação aqui, antes das reações
             if all(user.id in reactions for reactions in message_reactions.values()):
                 role = discord.utils.get(user.guild.roles, id=ROLE_ID)
                 if role not in user.roles:
