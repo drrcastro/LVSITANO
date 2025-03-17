@@ -1,68 +1,71 @@
-require("dotenv").config();
-const { Client, GatewayIntentBits } = require("discord.js");
+const { Client, Intents } = require('discord.js');
+const client = new Client({ intents: [Intents.FLAGS.GUILDS, Intents.FLAGS.GUILD_MESSAGES, Intents.FLAGS.MESSAGE_REACTIONS] });
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMessageReactions,
-  ],
-});
+const TOKEN = 'SEU_TOKEN_DO_BOT';
+const CHANNEL_ID = 'ID_DO_CANAL_ESPECIFICO';
+const ROLE_ID = 'ID_DO_ROLE_A_SER_ADICIONADO';
 
-const GUILD_ID = process.env.GUILD_ID;
-const CHANNEL_ID = process.env.CHANNEL_ID;
-const ROLE_ID = process.env.ROLE_ID;
+let mensagensRequeridas = new Set(); // Para armazenar as mensagens que o membro precisa reagir
 
-client.once("ready", () => {
-  console.log(`✅ Bot conectado como ${client.user.tag}`);
-});
-
-async function getUnreactedMessages(member) {
-  const guild = client.guilds.cache.get(GUILD_ID);
-  const channel = guild.channels.cache.get(CHANNEL_ID);
-  const messages = await channel.messages.fetch({ limit: 100 });
-
-  const unreactedMessages = [];
-  for (const message of messages.values()) {
-    let reacted = false;
-    for (const reaction of message.reactions.cache.values()) {
-      const users = await reaction.users.fetch();
-      if (users.has(member.id)) {
-        reacted = true;
-        break;
-      }
-    }
-    if (!reacted) {
-      unreactedMessages.push(message);
-    }
-  }
-  return unreactedMessages;
-}
-
-client.on("messageReactionAdd", async (reaction, user) => {
-  if (user.bot || reaction.message.channelId !== CHANNEL_ID) return;
-
-  const guild = client.guilds.cache.get(GUILD_ID);
-  const member = await guild.members.fetch(user.id);
-  const unreactedMessages = await getUnreactedMessages(member);
-  const role = guild.roles.cache.get(ROLE_ID);
-
-  if (unreactedMessages.length === 0 && !member.roles.cache.has(ROLE_ID)) {
-    await member.roles.add(role);
-    console.log(`✅ Role ${role.name} concedido a ${member.user.tag}`);
-  }
-});
-
-client.on("messageCreate", async (message) => {
-  if (message.channelId === CHANNEL_ID && !message.author.bot) {
-    const guild = message.guild;
-    const role = guild.roles.cache.get(ROLE_ID);
-    role.members.forEach(async (member) => {
-      await member.roles.remove(role);
-      console.log(`❌ Role ${role.name} removido de ${member.user.tag}`);
+client.once('ready', () => {
+    console.log('Bot está online!');
+    
+    // Obtém todas as mensagens do canal específico e armazena em 'mensagensRequeridas'
+    const canal = client.channels.cache.get(CHANNEL_ID);
+    canal.messages.fetch({ limit: 100 }).then(messages => {
+        messages.forEach(message => {
+            mensagensRequeridas.add(message.id);
+        });
     });
-  }
 });
 
-client.login(process.env.TOKEN);
+client.on('messageCreate', message => {
+    // Quando uma nova mensagem for enviada, adiciona à lista de mensagens requeridas
+    if (message.channel.id === CHANNEL_ID) {
+        mensagensRequeridas.add(message.id);
+    }
+});
+
+client.on('messageReactionAdd', async (reaction, user) => {
+    if (reaction.message.channel.id === CHANNEL_ID) {
+        // Verifica se o usuário reagiu a todas as mensagens
+        const reactedMessages = new Set();
+        
+        // Recolhe todas as reações que o usuário fez
+        for (const [messageId, message] of reaction.message.channel.messages.cache) {
+            const reactions = message.reactions.cache.filter(reaction => reaction.users.cache.has(user.id));
+            if (reactions.size > 0) {
+                reactedMessages.add(messageId);
+            }
+        }
+
+        // Se o usuário reagiu a todas as mensagens, atribui o role
+        if (mensagensRequeridas.size === reactedMessages.size) {
+            const member = await reaction.message.guild.members.fetch(user.id);
+            await member.roles.add(ROLE_ID);
+        }
+    }
+});
+
+client.on('messageReactionRemove', async (reaction, user) => {
+    if (reaction.message.channel.id === CHANNEL_ID) {
+        // Verifica se o usuário reagiu a todas as mensagens após remover a reação
+        const reactedMessages = new Set();
+
+        // Recolhe todas as reações que o usuário fez
+        for (const [messageId, message] of reaction.message.channel.messages.cache) {
+            const reactions = message.reactions.cache.filter(reaction => reaction.users.cache.has(user.id));
+            if (reactions.size > 0) {
+                reactedMessages.add(messageId);
+            }
+        }
+
+        // Se o usuário não reagiu a todas as mensagens, remove o role
+        if (mensagensRequeridas.size !== reactedMessages.size) {
+            const member = await reaction.message.guild.members.fetch(user.id);
+            await member.roles.remove(ROLE_ID);
+        }
+    }
+});
+
+client.login(TOKEN);
