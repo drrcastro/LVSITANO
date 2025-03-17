@@ -27,7 +27,6 @@ else:
     @bot.event
     async def on_message(message):
         print(f"Mensagem recebida no canal: {message.channel.id}")
-        
         if message.channel.id == CHANNEL_ID and not message.author.bot:
             # Remover o cargo de todos os usuários
             for member in message.guild.members:
@@ -35,9 +34,7 @@ else:
                 if role in member.roles:
                     await member.remove_roles(role)
                     print(f"{member.name} perdeu o cargo {role.name}.")
-
             message_reactions[message.id] = set()
-
         await bot.process_commands(message)
 
     @bot.event
@@ -46,9 +43,7 @@ else:
             print(f"Reação adicionada: {user.name} reagiu à mensagem {reaction.message.id}")
             if reaction.message.id not in message_reactions:
                 message_reactions[reaction.message.id] = set()
-
             message_reactions[reaction.message.id].add(user.id)
-
             # Verifica se o usuário já tem o cargo necessário
             if any(role.id == REQUIRE_ROLE_ID for role in user.roles):
                 if all(user.id in reactions for reactions in message_reactions.values()):
@@ -72,7 +67,6 @@ else:
             print(f"Reação removida: {user.name} removeu a reação da mensagem {reaction.message.id}")
             if reaction.message.id in message_reactions:
                 message_reactions[reaction.message.id].discard(user.id)
-
             if not all(user.id in reactions for reactions in message_reactions.values()):
                 role = discord.utils.get(user.guild.roles, id=ROLE_ID)
                 if role in user.roles:
