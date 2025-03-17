@@ -7,7 +7,7 @@ load_dotenv()
 
 TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
-REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
+REQUIRED_ROLE_ID = int(os.getenv('DISCORDE_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
 intents = discord.Intents.default()
@@ -41,26 +41,54 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
+async def check_reactions_and_apply_role(member, channel, role):
+    messages = await channel.history(limit=None).flatten() #pega todas as mensagens do canal
+    has_reacted_to_all = True
+    for msg in messages:
+        if not discord.utils.get(msg.reactions, lambda r: discord.utils.get(r.users(), id=member.id)):
+            if msg.author != bot.user: #ignora as mensagens do bot
+                has_reacted_to_all = False
+                break
+
+    if has_reacted_to_all:
+        await member.add_roles(role)
+        print(f'Role reatribuído a {member.name} (reações verificadas)')
+
 @bot.event
 async def on_raw_reaction_add(payload):
     if payload.channel_id != CHANNEL_ID:
         return
 
     channel = bot.get_channel(CHANNEL_ID)
-
-    user = bot.get_user(payload.user_id)
     member = channel.guild.get_member(payload.user_id)
+    role = channel.guild.get_role(ROLE_ID)
+    required_role = discord.utils.get(member.roles, id=REQUIRED_ROLE_ID)
 
-    if member and bot.user != user:
-        required_role = discord.utils.get(member.roles, id=REQUIRED_ROLE_ID)
+    if member and bot.user != member:
         if required_role:
-            role_to_reapply = channel.guild.get_role(ROLE_ID)
-            if role_to_reapply:
-                await member.add_roles(role_to_reapply)
-                print(f'Role reatribuído a {member.name}')
-            else:
-                print(f'Role com ID {ROLE_ID} não encontrado')
+            await check_reactions_and_apply_role(member, channel, role)
         else:
             print(f'{member.name} não possui o role necessário')
+
+@bot.event
+async def on_raw_reaction_remove(payload):
+    if payload.channel_id != CHANNEL_ID:
+        return
+
+    channel = bot.get_channel(CHANNEL_ID)
+    member = channel.guild.get_member(payload.user_id)
+    role = channel.guild.get_role(ROLE_ID)
+
+    if member and bot.user != member:
+        if role in member.roles:
+            await member.remove_roles(role)
+            print(f'Role removido de {member.name} (reação removida)')
+
+@bot.event
+async def on_member_update(before, after):
+    if REQUIRED_ROLE_ID in [role.id for role in after.roles] and REQUIRED_ROLE_ID not in [role.id for role in before.roles]:
+        channel = bot.get_channel(CHANNEL_ID)
+        role = after.guild.get_role(ROLE_ID)
+        await check_reactions_and_apply_role(after, channel, role)
 
 bot.run(TOKEN)
