@@ -148,4 +148,27 @@ async def on_member_update(before, after):
                     except Exception as e:
                         print(f'⚠️ Erro ao tentar adicionar o cargo a {user.name}: {e}')
 
+@bot.event
+async def on_message_delete(message):
+    """ Remove a mensagem do rastreamento se for deletada. """
+    if message.channel.id == CHANNEL_ID:
+        if message.id in message_reactions:
+            del message_reactions[message.id]
+            print(f'🗑️ Mensagem {message.id} foi apagada e removida do rastreamento.')
+
+        # Após remover a mensagem, verificar se algum usuário perdeu o cargo
+        role = discord.utils.get(message.guild.roles, id=ROLE_ID)
+        if role:
+            for member in message.guild.members:
+                if role in member.roles:
+                    if not all(member.id in reactions for reactions in message_reactions.values()):
+                        try:
+                            await member.remove_roles(role)
+                            print(f'🚫 {member.name} perdeu o cargo {role.name} pois uma mensagem foi apagada.')
+                        except discord.Forbidden:
+                            print(f'❌ Permissões insuficientes para remover o cargo de {member.name}')
+                        except Exception as e:
+                            print(f'⚠️ Erro ao tentar remover o cargo de {member.name}: {e}')
+
+
 bot.run(BOT_TOKEN)
