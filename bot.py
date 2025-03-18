@@ -25,6 +25,35 @@ message_reactions = {}
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user}')
+    guild = bot.guilds[0]  # Supondo que o bot está em um único servidor
+
+    # Recuperar mensagens antigas do canal e inicializar as reações
+    channel = bot.get_channel(CHANNEL_ID)
+    if channel:
+        async for message in channel.history(limit=100):  # Ajuste o limite conforme necessário
+            message_reactions[message.id] = set()
+            for reaction in message.reactions:
+                async for user in reaction.users():
+                    if not user.bot:
+                        message_reactions[message.id].add(user.id)
+
+    # Verificar membros que já possuem o cargo necessário e atribuir o cargo de reação
+    role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
+    role_target = discord.utils.get(guild.roles, id=ROLE_ID)
+    if role_required and role_target:
+        for member in guild.members:
+            if role_required in member.roles:  # Verifica se o usuário tem o cargo necessário
+                if all(member.id in reactions for reactions in message_reactions.values()):
+                    if role_target not in member.roles:
+                        try:
+                            await member.add_roles(role_target)
+                            print(f'✅ {member.name} recebeu o cargo {role_target.name} ao iniciar o bot.')
+                        except discord.Forbidden:
+                            print(f'❌ Permissões insuficientes para adicionar o cargo a {member.name}')
+                        except Exception as e:
+                            print(f'⚠️ Erro ao tentar adicionar o cargo a {member.name}: {e}')
+    else:
+        print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
 
 @bot.event
 async def on_message(message):
