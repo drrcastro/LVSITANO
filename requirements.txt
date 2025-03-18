@@ -1,2 +1,5 @@
 discord.py
 python-dotenv
+Flask==1.1.2
+gunicorn==20.1.0
+werkzeug==2.0.2
