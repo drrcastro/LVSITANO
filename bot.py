@@ -77,4 +77,46 @@ async def on_reaction_add(reaction, user):
                     except discord.Forbidden:
                         print(f'❌ Permissões insuficientes para adicionar o cargo a {user.name}')
                     except Exception as e:
-                        print(f'⚠️ Erro ao tentar adicionar o cargo a {user
+                        print(f'⚠️ Erro ao tentar adicionar o cargo a {user.name}: {e}')
+        else:
+            print(f'⚠️ {user.name} não possui o cargo necessário para ganhar o novo cargo.')
+
+@bot.event
+async def on_reaction_remove(reaction, user):
+    if reaction.message.channel.id == CHANNEL_ID and not user.bot:
+        print(f'➖ Reação removida: {user.name} removeu a reação da mensagem {reaction.message.id}')
+
+        if reaction.message.id in message_reactions:
+            message_reactions[reaction.message.id].discard(user.id)
+
+        if not all(user.id in reactions for reactions in message_reactions.values()):
+            role = discord.utils.get(user.guild.roles, id=ROLE_ID)
+            if role and role in user.roles:
+                try:
+                    await user.remove_roles(role)
+                    print(f'🚫 {user.name} perdeu o cargo {role.name}.')
+                except discord.Forbidden:
+                    print(f'❌ Permissões insuficientes para remover o cargo de {user.name}')
+                except Exception as e:
+                    print(f'⚠️ Erro ao tentar remover o cargo de {user.name}: {e}')
+
+@bot.event
+async def on_member_update(before, after):
+    """ Garante que, ao receber o cargo necessário, o usuário obtenha o cargo alvo se tiver reagido a todas as mensagens. """
+    if REQUIRED_ROLE_ID in [role.id for role in after.roles] and REQUIRED_ROLE_ID not in [role.id for role in before.roles]:
+        user = after
+        required_role = discord.utils.get(user.guild.roles, id=REQUIRED_ROLE_ID)
+
+        if required_role:
+            if all(user.id in reactions for reactions in message_reactions.values()):
+                role = discord.utils.get(user.guild.roles, id=ROLE_ID)
+                if role and role not in user.roles:
+                    try:
+                        await user.add_roles(role)
+                        print(f'✅ {user.name} recebeu o cargo {role.name} (ao receber o cargo necessário).')
+                    except discord.Forbidden:
+                        print(f'❌ Permissões insuficientes para adicionar o cargo a {user.name}')
+                    except Exception as e:
+                        print(f'⚠️ Erro ao tentar adicionar o cargo a {user.name}: {e}')
+
+bot.run(BOT_TOKEN)
