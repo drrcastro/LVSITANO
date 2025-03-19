@@ -90,12 +90,13 @@ async def on_reaction_remove(reaction, user):
         print(f'➖ {user.name} removeu reação da mensagem {reaction.message.id}')
 
         # Remove a reação do usuário na mensagem correspondente
-        message_reactions.get(reaction.message.id, set()).discard(user.id)
-        print(f"Reações após remoção: {message_reactions}")  # Verifica as reações após a remoção
+        if reaction.message.id in message_reactions:
+            message_reactions[reaction.message.id].discard(user.id)
+            print(f"Reações após remoção: {message_reactions[reaction.message.id]}")  # Verifica as reações após a remoção
 
-        # Se o usuário não reagiu a todas as mensagens, remove o cargo
+        # Verifica se o usuário reagiu a todas as mensagens
         reactions_check = all(user.id in reactions for reactions in message_reactions.values())
-        print(f"Verificação de reações na remoção: {reactions_check}")  # Verifica a condição de remoção
+        print(f"Verificação de reações após remoção: {reactions_check}")  # Verifica a condição de remoção
         if not reactions_check:
             guild = user.guild
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
@@ -145,8 +146,10 @@ async def initialize_reactions():
     print(' Inicializando rastreamento de mensagens e reações...')
     message_reactions.clear()
 
+    # Percorre até 100 mensagens para verificar as reações
     async for message in channel.history(limit=100):
         message_reactions[message.id] = set()
+
         for reaction in message.reactions:
             async for user in reaction.users():
                 if not user.bot:
@@ -174,7 +177,6 @@ async def initialize_reactions():
                                         print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
                     else:
                         print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
-                        print(f"Cargo necessário encontrado: {role_required != None}, Cargo alvo encontrado: {role_target != None}")
 
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
 
