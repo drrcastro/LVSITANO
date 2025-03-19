@@ -116,17 +116,26 @@ async def on_message_delete(message):
 
 async def initialize_reactions():
     await bot.wait_until_ready()
-    await asyncio.sleep(1) # Adiciona um atraso
+    await asyncio.sleep(1)
 
     guild = bot.guilds[0]
-    print(f"Guild ID: {guild.id}") # Verifica o ID da guilda
-    await guild.fetch_roles() # Força a atualização da cache
-    await asyncio.sleep(2) # Adiciona um atraso maior
+    print(f"Guild ID: {guild.id}")
+    await guild.fetch_roles()
+    await asyncio.sleep(5)  # Aumenta o atraso para 5 segundos
 
     channel = bot.get_channel(CHANNEL_ID)
 
     if not channel:
         print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
+        return
+        
+    await asyncio.sleep(5)
+
+    role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
+    role_target = discord.utils.get(guild.roles, id=ROLE_ID)
+
+    if not role_required or not role_target:
+        print('⚠️ Cargos não encontrados após atraso. Verifique os IDs e permissões.')
         return
 
     print(' Inicializando rastreamento de mensagens e reações...')
@@ -134,23 +143,20 @@ async def initialize_reactions():
 
     async for message in channel.history(limit=100):
         message_reactions[message.id] = set()
-        print(f"Mensagem ID: {message.id}") # Verifica o ID da mensagem
         for reaction in message.reactions:
-            print(f"Reação: {reaction.emoji}") # Verifica o emoji da reação
             async for user in reaction.users():
                 if not user.bot:
                     message_reactions[message.id].add(user.id)
-                    print(f"Utilizador que reagiu: {user.name}") # Verifica o utilizador que reagiu
                     role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
                     role_target = discord.utils.get(guild.roles, id=ROLE_ID)
 
                     if role_required and role_target:
-                        print(f"Cargo necessário: {role_required.name}, Cargo alvo: {role_target.name}") # Verifica os nomes dos cargos
+                        print(f"Cargo necessário: {role_required.name}, Cargo alvo: {role_target.name}")
 
                         required_check = role_required in user.roles
                         reactions_check = all(user.id in reactions for reactions in message_reactions.values())
 
-                        print(f"Verificação de cargo necessário: {required_check}, Verificação de reações: {reactions_check}") # Verifica as condições
+                        print(f"Verificação de cargo necessário: {required_check}, Verificação de reações: {reactions_check}")
 
                         if required_check:
                             if reactions_check:
@@ -164,6 +170,7 @@ async def initialize_reactions():
                                         print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
                     else:
                         print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
+                        print(f"Cargo necessário encontrado: {role_required != None}, Cargo alvo encontrado: {role_target != None}") # Verifica se os cargos foram encontrados
 
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
 
