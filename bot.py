@@ -7,30 +7,50 @@ from dotenv import load_dotenv
 # Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
 
-# Obtém os valores das variáveis de ambiente
 BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
 REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
-GUILD_ID_STR = os.getenv('DISCORD_GUILD_ID')
+GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
 
-if GUILD_ID_STR is None:
-    print("Erro: A variável de ambiente DISCORD_GUILD_ID não está definida.")
-    exit(1)  # Finaliza o programa com código de erro
-
-GUILD_ID = int(GUILD_ID_STR)
-
-# Configuração das intents necessárias para o bot funcionar corretamente
+# Configurar intents (lembre-se de habilitar essas intents no portal do Discord também)
 intents = discord.Intents.default()
-intents.members = True  # Permite o bot interagir com membros
-intents.message_content = True  # Permite o bot acessar o conteúdo das mensagens
-intents.reactions = True  # Permite o bot monitorar reações
+intents.members = True
+intents.messages = True
+intents.reactions = True
 
-# Inicializa o bot com o prefixo '!' para comandos
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Dicionário que armazena reações por mensagem
-message_reactions = {}
+# Dicionário que armazena, para cada mensagem, os IDs dos usuários que reagiram
+message_reactions = {}  # { message_id: set(user_id) }
+
+async def check_user_reactions(user_id, guild):
+    """Retorna True se o usuário reagiu a todas as mensagens monitoradas."""
+    for reactions in message_reactions.values():
+        if user_id not in reactions:
+            return False
+    return True
+
+async def update_user_role(member, guild):
+    """Adiciona ou remove o cargo conforme o estado das reações."""
+    role = guild.get_role(ROLE_ID)
+    if not role:
+        return
+
+    if await check_user_reactions(member.id, guild):
+        if role not in member.roles:
+            try:
+                await member.add_roles(role)
+                print(f'✅ {member} recebeu o cargo {role.name}')
+            except Exception as e:
+                print(f'⚠️ Erro ao adicionar cargo a {member}: {e}')
+    else:
+        if role in member.roles:
+            try:
+                await member.remove_roles(role)
+                print(f'❌ {member} perdeu o cargo {role.name}')
+            except Exception as e:
+                print(f'⚠️ Erro ao remover cargo de {member}: {e}')
 
 @bot.event
 async def on_ready():
@@ -38,147 +58,66 @@ async def on_ready():
     await initialize_reactions()
 
 @bot.event
-async def on_message(message):
-    if message.author == bot.user:
-        return  # Ignora mensagens enviadas pelo próprio bot
+async def on_raw_reaction_add(payload):
+    # Verifica se o evento ocorreu no canal desejado e ignora reações do próprio bot
+    if payload.channel_id != CHANNEL_ID or payload.user_id == bot.user.id:
+        return
 
-    print(f' Nova mensagem detectada: {message.id} no canal {message.channel.id}')
+    # Atualiza o dicionário para a mensagem
+    message_reactions.setdefault(payload.message_id, set()).add(payload.user_id)
+    print(f'➕ Usuário {payload.user_id} adicionou reação na mensagem {payload.message_id}')
 
-    if message.channel.id == CHANNEL_ID and not message.author.bot:
-        guild = message.guild
-        role = guild.get_role(ROLE_ID)
-
-        if role:
-            for member in guild.members:
-                if role in member.roles:
-                    try:
-                        await member.remove_roles(role)
-                        print(f' Cargo removido de {member.name}')
-                    except discord.Forbidden:
-                        print(f'❌ Sem permissão para remover o cargo de {member.name}')
-                    except Exception as e:
-                        print(f'⚠️ Erro ao remover cargo de {member.name}: {e}')
-
-        # Inicializa a lista de reações para a nova mensagem
-        message_reactions[message.id] = set()
-
-    await bot.process_commands(message)  # Permite que comandos do bot sejam processados
+    guild = bot.get_guild(payload.guild_id)
+    member = guild.get_member(payload.user_id)
+    if member:
+        await update_user_role(member, guild)
 
 @bot.event
-async def on_reaction_add(reaction, user):
-    if reaction.message.channel.id == CHANNEL_ID and not user.bot:
-        print(f'➕ {user.name} reagiu à mensagem {reaction.message.id}')
+async def on_raw_reaction_remove(payload):
+    # Verifica se o evento ocorreu no canal desejado
+    if payload.channel_id != CHANNEL_ID:
+        return
 
-        # Adiciona a reação do usuário na mensagem correspondente
-        message_reactions.setdefault(reaction.message.id, set()).add(user.id)
+    guild = bot.get_guild(payload.guild_id)
+    # Atualiza o dicionário removendo o ID do usuário para a mensagem
+    if payload.message_id in message_reactions:
+        message_reactions[payload.message_id].discard(payload.user_id)
+    print(f'➖ Usuário {payload.user_id} removeu reação da mensagem {payload.message_id}')
 
-        # Verifica se o usuário reagiu a todas as mensagens
-        if all(user.id in reactions for reactions in message_reactions.values()):
-            role = discord.utils.get(user.guild.roles, id=ROLE_ID)
-            if role and role not in user.roles:
-                try:
-                    await user.add_roles(role)
-                    print(f'✅ {user.name} recebeu o cargo {role.name}')
-                except discord.Forbidden:
-                    print(f'❌ Sem permissão para adicionar o cargo a {user.name}')
-                except Exception as e:
-                    print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
-
-@bot.event
-async def on_reaction_remove(reaction, user):
-    if reaction.message.channel.id == CHANNEL_ID and not user.bot:
-        print(f'➖ {user.name} removeu reação da mensagem {reaction.message.id}')
-
-        # Remove a reação do usuário na mensagem correspondente
-        if reaction.message.id in message_reactions:
-            message_reactions[reaction.message.id].discard(user.id)
-            print(f"Reações após remoção: {message_reactions[reaction.message.id]}")  # Verifica as reações após a remoção
-
-        # Verifica se o usuário reagiu a todas as mensagens
-        reactions_check = all(user.id in reactions for reactions in message_reactions.values())
-        print(f"Verificação de reações após remoção: {reactions_check}")  # Verifica a condição de remoção
-        if not reactions_check:
-            guild = user.guild
-            role = discord.utils.get(user.guild.roles, id=ROLE_ID)
-            if role and role in user.roles:
-                try:
-                    await user.remove_roles(role)
-                    print(f' {user.name} perdeu o cargo {role.name}')
-                except discord.Forbidden:
-                    print(f'❌ Sem permissão para remover o cargo de {user.name}')
-                except Exception as e:
-                    print(f'⚠️ Erro ao remover o cargo de {user.name}: {e}')
-
-@bot.event
-async def on_message_delete(message):
-    if message.channel.id == CHANNEL_ID:
-        if message.id in message_reactions:
-            del message_reactions[message.id]
-            print(f'️ Mensagem {message.id} apagada, removida do rastreamento.')
-
-        role = discord.utils.get(message.guild.roles, id=ROLE_ID)
-        if role:
-            for member in message.guild.members:
-                if role in member.roles and not all(member.id in reactions for reactions in message_reactions.values()):
-                    try:
-                        await member.remove_roles(role)
-                        print(f' {member.name} perdeu o cargo {role.name} após a exclusão de uma mensagem.')
-                    except discord.Forbidden:
-                        print(f'❌ Sem permissão para remover o cargo de {member.name}')
-                    except Exception as e:
-                        print(f'⚠️ Erro ao remover o cargo de {member.name}: {e}')
+    member = guild.get_member(payload.user_id)
+    if member:
+        await update_user_role(member, guild)
 
 async def initialize_reactions():
+    """Carrega o estado das reações das últimas 100 mensagens do canal e atualiza os cargos."""
     await bot.wait_until_ready()
-    await asyncio.sleep(1)
-
-    guild = bot.get_guild(GUILD_ID)  # obtém a guilda pelo ID da variável de ambiente
-    print(f"Guild ID: {guild.id}")
-    await guild.fetch_roles()
-    await asyncio.sleep(5)  # Aumenta o atraso para 5 segundos
-
-    channel = bot.get_channel(CHANNEL_ID)
-
+    guild = bot.get_guild(GUILD_ID)
+    channel = guild.get_channel(CHANNEL_ID)
     if not channel:
         print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
         return
 
-    print(' Inicializando rastreamento de mensagens e reações...')
+    print('Inicializando rastreamento de mensagens e reações...')
     message_reactions.clear()
-
-    # Percorre até 100 mensagens para verificar as reações
+    
+    # Percorre as últimas 100 mensagens do canal
     async for message in channel.history(limit=100):
         message_reactions[message.id] = set()
-
         for reaction in message.reactions:
             async for user in reaction.users():
                 if not user.bot:
                     message_reactions[message.id].add(user.id)
-                    role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
-                    role_target = discord.utils.get(guild.roles, id=ROLE_ID)
-
-                    if role_required and role_target:
-                        print(f"Cargo necessário: {role_required.name}, Cargo alvo: {role_target.name}")
-
-                        required_check = role_required in user.roles
-                        reactions_check = all(user.id in reactions for reactions in message_reactions.values())
-
-                        print(f"Verificação de cargo necessário: {required_check}, Verificação de reações: {reactions_check}")
-
-                        if required_check:
-                            if reactions_check:
-                                if role_target not in user.roles:
-                                    try:
-                                        await user.add_roles(role_target)
-                                        print(f'✅ {user.name} recebeu o cargo {role_target.name} após reinicialização.')
-                                    except discord.Forbidden:
-                                        print(f'❌ Sem permissão para adicionar o cargo a {user.name}')
-                                    except Exception as e:
-                                        print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
-                    else:
-                        print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
 
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
 
-# Inicia o bot
+    # Atualiza os cargos para todos os usuários que reagiram em alguma mensagem
+    all_user_ids = set()
+    for reactions in message_reactions.values():
+        all_user_ids.update(reactions)
+
+    for user_id in all_user_ids:
+        member = guild.get_member(user_id)
+        if member:
+            await update_user_role(member, guild)
+
 bot.run(BOT_TOKEN)
