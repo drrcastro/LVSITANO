@@ -12,6 +12,7 @@ BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
 REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
+GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
 
 # Configuração das intents necessárias para o bot funcionar corretamente
 intents = discord.Intents.default()
@@ -118,7 +119,7 @@ async def initialize_reactions():
     await bot.wait_until_ready()
     await asyncio.sleep(1)
 
-    guild = bot.guilds[0]
+    guild = bot.get_guild(GUILD_ID) # obtém a guilda pelo ID da variável de ambiente
     print(f"Guild ID: {guild.id}")
     await guild.fetch_roles()
     await asyncio.sleep(5)  # Aumenta o atraso para 5 segundos
