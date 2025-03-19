@@ -117,40 +117,38 @@ async def initialize_reactions():
     await bot.wait_until_ready()
     guild = bot.guilds[0]
     channel = bot.get_channel(CHANNEL_ID)
-    
+
     if not channel:
         print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
         return
-    
-    print('🔄 Inicializando rastreamento de mensagens e reações...')
+
+    print(' Inicializando rastreamento de mensagens e reações...')
     message_reactions.clear()
-    
+
     async for message in channel.history(limit=100):
         message_reactions[message.id] = set()
         for reaction in message.reactions:
             async for user in reaction.users():
                 if not user.bot:
                     message_reactions[message.id].add(user.id)
-    
+                    # Verifica o cargo aqui
+                    role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
+                    role_target = discord.utils.get(guild.roles, id=ROLE_ID)
+                    if role_required and role_target:
+                        if role_required in user.roles:
+                            if all(user.id in reactions for reactions in message_reactions.values()):
+                                if role_target not in user.roles:
+                                    try:
+                                        await user.add_roles(role_target)
+                                        print(f'✅ {user.name} recebeu o cargo {role_target.name} após reinicialização.')
+                                    except discord.Forbidden:
+                                        print(f'❌ Sem permissão para adicionar o cargo a {user.name}')
+                                    except Exception as e:
+                                        print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
+                    else:
+                        print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
+
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
-    
-    role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
-    role_target = discord.utils.get(guild.roles, id=ROLE_ID)
-    
-    if role_required and role_target:
-        for member in guild.members:
-            if role_required in member.roles:
-                if all(member.id in reactions for reactions in message_reactions.values()):
-                    if role_target not in member.roles:
-                        try:
-                            await member.add_roles(role_target)
-                            print(f'✅ {member.name} recebeu o cargo {role_target.name} após reinicialização.')
-                        except discord.Forbidden:
-                            print(f'❌ Sem permissão para adicionar o cargo a {member.name}')
-                        except Exception as e:
-                            print(f'⚠️ Erro ao adicionar o cargo a {member.name}: {e}')
-    else:
-        print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
 
 # Inicia o bot
 bot.run(BOT_TOKEN)
