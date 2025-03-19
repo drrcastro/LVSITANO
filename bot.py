@@ -1,6 +1,6 @@
+import asyncio
 import os
 import discord
-import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -15,9 +15,9 @@ CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
 # Configuração das intents necessárias para o bot funcionar corretamente
 intents = discord.Intents.default()
-intents.members = True  # Permite o bot interagir com membros
-intents.message_content = True  # Permite o bot acessar o conteúdo das mensagens
-intents.reactions = True  # Permite o bot monitorar reações
+intents.members = True   # Permite o bot interagir com membros
+intents.message_content = True   # Permite o bot acessar o conteúdo das mensagens
+intents.reactions = True   # Permite o bot monitorar reações
 
 # Inicializa o bot com o prefixo '!' para comandos
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -36,7 +36,7 @@ async def on_message(message):
         return  # Ignora mensagens enviadas pelo próprio bot
 
     print(f'📩 Nova mensagem detectada: {message.id} no canal {message.channel.id}')
-    
+
     if message.channel.id == CHANNEL_ID and not message.author.bot:
         guild = message.guild
         role = guild.get_role(ROLE_ID)
@@ -51,7 +51,7 @@ async def on_message(message):
                         print(f'❌ Sem permissão para remover o cargo de {member.name}')
                     except Exception as e:
                         print(f'⚠️ Erro ao remover cargo de {member.name}: {e}')
-        
+
         # Inicializa a lista de reações para a nova mensagem
         message_reactions[message.id] = set()
 
@@ -61,9 +61,9 @@ async def on_message(message):
 async def on_reaction_add(reaction, user):
     if reaction.message.channel.id == CHANNEL_ID and not user.bot:
         print(f'➕ {user.name} reagiu à mensagem {reaction.message.id}')
-        
+
         message_reactions.setdefault(reaction.message.id, set()).add(user.id)
-        
+
         # Verifica se todas as mensagens possuem a reação do usuário
         if all(user.id in reactions for reactions in message_reactions.values()):
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
@@ -82,7 +82,7 @@ async def on_reaction_remove(reaction, user):
         print(f'➖ {user.name} removeu reação da mensagem {reaction.message.id}')
 
         message_reactions.get(reaction.message.id, set()).discard(user.id)
-        
+
         # Se o usuário não reagiu a todas as mensagens, remove o cargo
         if not all(user.id in reactions for reactions in message_reactions.values()):
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
@@ -101,7 +101,7 @@ async def on_message_delete(message):
         if message.id in message_reactions:
             del message_reactions[message.id]
             print(f'🗑️ Mensagem {message.id} apagada, removida do rastreamento.')
-        
+
         role = discord.utils.get(message.guild.roles, id=ROLE_ID)
         if role:
             for member in message.guild.members:
@@ -115,18 +115,6 @@ async def on_message_delete(message):
                         print(f'⚠️ Erro ao remover o cargo de {member.name}: {e}')
 
 async def initialize_reactions():
-    await bot.wait_until_ready()
-    guild = bot.guilds[0]
-    channel = bot.get_channel(CHANNEL_ID)
-
-    if not channel:
-        print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
-        return
-
-    print(' Inicializando rastreamento de mensagens e reações...')
-    message_reactions.clear()
-
-    async def initialize_reactions():
     await bot.wait_until_ready()
     await asyncio.sleep(1) # Adiciona um atraso
 
