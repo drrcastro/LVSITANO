@@ -69,9 +69,10 @@ async def on_reaction_add(reaction, user):
     if reaction.message.channel.id == CHANNEL_ID and not user.bot:
         print(f'➕ {user.name} reagiu à mensagem {reaction.message.id}')
 
+        # Adiciona a reação do usuário na mensagem correspondente
         message_reactions.setdefault(reaction.message.id, set()).add(user.id)
 
-        # Verifica se todas as mensagens possuem a reação do usuário
+        # Verifica se o usuário reagiu a todas as mensagens
         if all(user.id in reactions for reactions in message_reactions.values()):
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
             if role and role not in user.roles:
@@ -88,6 +89,7 @@ async def on_reaction_remove(reaction, user):
     if reaction.message.channel.id == CHANNEL_ID and not user.bot:
         print(f'➖ {user.name} removeu reação da mensagem {reaction.message.id}')
 
+        # Remove a reação do usuário na mensagem correspondente
         message_reactions.get(reaction.message.id, set()).discard(user.id)
         print(f"Reações após remoção: {message_reactions}")  # Verifica as reações após a remoção
 
@@ -172,6 +174,7 @@ async def initialize_reactions():
                                         print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
                     else:
                         print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
+                        print(f"Cargo necessário encontrado: {role_required != None}, Cargo alvo encontrado: {role_target != None}")
 
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
 
