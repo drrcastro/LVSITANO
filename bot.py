@@ -13,15 +13,16 @@ REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
 
-# Configurar intents (lembre-se de habilitar essas intents no portal do Discord também)
+# Configurar intents – certifique-se de habilitar "MESSAGE CONTENT INTENT" no portal do Discord
 intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
 intents.reactions = True
+intents.message_content = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Dicionário que armazena, para cada mensagem, os IDs dos usuários que reagiram
+# Dicionário que mapeia cada mensagem (ID) para o conjunto de IDs dos usuários que reagiram
 message_reactions = {}  # { message_id: set(user_id) }
 
 async def check_user_reactions(user_id, guild):
@@ -32,7 +33,7 @@ async def check_user_reactions(user_id, guild):
     return True
 
 async def update_user_role(member, guild):
-    """Adiciona ou remove o cargo conforme o estado das reações."""
+    """Adiciona ou remove o cargo conforme se o usuário reagiu a todas as mensagens."""
     role = guild.get_role(ROLE_ID)
     if not role:
         return
@@ -58,12 +59,30 @@ async def on_ready():
     await initialize_reactions()
 
 @bot.event
+async def on_message(message):
+    # Apenas processa mensagens do canal monitorado e ignora mensagens de bots
+    if message.channel.id != CHANNEL_ID or message.author.bot:
+        await bot.process_commands(message)
+        return
+
+    print(f'Nova mensagem postada: {message.id} no canal {message.channel.id}')
+    # Registra a nova mensagem com um conjunto vazio de reações
+    message_reactions[message.id] = set()
+
+    # Atualiza os cargos de todos os membros, pois com a nova mensagem ninguém reagiu a ela ainda
+    guild = message.guild
+    for member in guild.members:
+        if not member.bot:
+            await update_user_role(member, guild)
+
+    await bot.process_commands(message)
+
+@bot.event
 async def on_raw_reaction_add(payload):
-    # Verifica se o evento ocorreu no canal desejado e ignora reações do próprio bot
     if payload.channel_id != CHANNEL_ID or payload.user_id == bot.user.id:
         return
 
-    # Atualiza o dicionário para a mensagem
+    # Atualiza o dicionário: adiciona o usuário à mensagem
     message_reactions.setdefault(payload.message_id, set()).add(payload.user_id)
     print(f'➕ Usuário {payload.user_id} adicionou reação na mensagem {payload.message_id}')
 
@@ -74,12 +93,10 @@ async def on_raw_reaction_add(payload):
 
 @bot.event
 async def on_raw_reaction_remove(payload):
-    # Verifica se o evento ocorreu no canal desejado
     if payload.channel_id != CHANNEL_ID:
         return
 
     guild = bot.get_guild(payload.guild_id)
-    # Atualiza o dicionário removendo o ID do usuário para a mensagem
     if payload.message_id in message_reactions:
         message_reactions[payload.message_id].discard(payload.user_id)
     print(f'➖ Usuário {payload.user_id} removeu reação da mensagem {payload.message_id}')
@@ -89,7 +106,7 @@ async def on_raw_reaction_remove(payload):
         await update_user_role(member, guild)
 
 async def initialize_reactions():
-    """Carrega o estado das reações das últimas 100 mensagens do canal e atualiza os cargos."""
+    """Carrega as reações das últimas 100 mensagens do canal e atualiza os cargos."""
     await bot.wait_until_ready()
     guild = bot.get_guild(GUILD_ID)
     channel = guild.get_channel(CHANNEL_ID)
@@ -99,8 +116,7 @@ async def initialize_reactions():
 
     print('Inicializando rastreamento de mensagens e reações...')
     message_reactions.clear()
-    
-    # Percorre as últimas 100 mensagens do canal
+
     async for message in channel.history(limit=100):
         message_reactions[message.id] = set()
         for reaction in message.reactions:
@@ -114,7 +130,6 @@ async def initialize_reactions():
     all_user_ids = set()
     for reactions in message_reactions.values():
         all_user_ids.update(reactions)
-
     for user_id in all_user_ids:
         member = guild.get_member(user_id)
         if member:
