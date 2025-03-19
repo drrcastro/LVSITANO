@@ -1,5 +1,6 @@
 import os
 import discord
+import asyncio
 from discord.ext import commands
 from dotenv import load_dotenv
 
@@ -125,13 +126,29 @@ async def initialize_reactions():
     print(' Inicializando rastreamento de mensagens e reações...')
     message_reactions.clear()
 
+    async def initialize_reactions():
+    await bot.wait_until_ready()
+    await asyncio.sleep(1) # Adiciona um atraso
+
+    guild = bot.guilds[0]
+    print(f"Guild ID: {guild.id}") # Verifica o ID da guilda
+    await guild.fetch_roles() # Força a atualização da cache
+
+    channel = bot.get_channel(CHANNEL_ID)
+
+    if not channel:
+        print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
+        return
+
+    print(' Inicializando rastreamento de mensagens e reações...')
+    message_reactions.clear()
+
     async for message in channel.history(limit=100):
         message_reactions[message.id] = set()
         for reaction in message.reactions:
             async for user in reaction.users():
                 if not user.bot:
                     message_reactions[message.id].add(user.id)
-                    # Verifica o cargo aqui
                     role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
                     role_target = discord.utils.get(guild.roles, id=ROLE_ID)
                     if role_required and role_target:
