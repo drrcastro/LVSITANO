@@ -16,7 +16,7 @@ GUILD_ID_STR = os.getenv('DISCORD_GUILD_ID')
 
 if GUILD_ID_STR is None:
     print("Erro: A variável de ambiente DISCORD_GUILD_ID não está definida.")
-    exit(1) # Finaliza o programa com código de erro
+    exit(1)  # Finaliza o programa com código de erro
 
 GUILD_ID = int(GUILD_ID_STR)
 
@@ -89,14 +89,13 @@ async def on_reaction_remove(reaction, user):
         print(f'➖ {user.name} removeu reação da mensagem {reaction.message.id}')
 
         message_reactions.get(reaction.message.id, set()).discard(user.id)
-        print(f"Reações após remoção: {message_reactions}") # Verifica as reações após a remoção
+        print(f"Reações após remoção: {message_reactions}")  # Verifica as reações após a remoção
 
         # Se o usuário não reagiu a todas as mensagens, remove o cargo
         reactions_check = all(user.id in reactions for reactions in message_reactions.values())
-        print(f"Verificação de reações na remoção: {reactions_check}") # Verifica a condição de remoção
+        print(f"Verificação de reações na remoção: {reactions_check}")  # Verifica a condição de remoção
         if not reactions_check:
             guild = user.guild
-            await guild.fetch_roles() # Atualiza a cache
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
             if role and role in user.roles:
                 try:
@@ -130,7 +129,7 @@ async def initialize_reactions():
     await bot.wait_until_ready()
     await asyncio.sleep(1)
 
-    guild = bot.get_guild(GUILD_ID) # obtém a guilda pelo ID da variável de ambiente
+    guild = bot.get_guild(GUILD_ID)  # obtém a guilda pelo ID da variável de ambiente
     print(f"Guild ID: {guild.id}")
     await guild.fetch_roles()
     await asyncio.sleep(5)  # Aumenta o atraso para 5 segundos
@@ -173,7 +172,6 @@ async def initialize_reactions():
                                         print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
                     else:
                         print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
-                        print(f"Cargo necessário encontrado: {role_required != None}, Cargo alvo encontrado: {role_target != None}")
 
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
 
