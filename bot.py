@@ -60,7 +60,7 @@ async def on_ready():
 
 @bot.event
 async def on_message(message):
-    # Apenas processa mensagens do canal monitorado e ignora mensagens de bots
+    # Processa apenas mensagens do canal monitorado e ignora mensagens de bots
     if message.channel.id != CHANNEL_ID or message.author.bot:
         await bot.process_commands(message)
         return
@@ -69,7 +69,7 @@ async def on_message(message):
     # Registra a nova mensagem com um conjunto vazio de reações
     message_reactions[message.id] = set()
 
-    # Atualiza os cargos de todos os membros, pois com a nova mensagem ninguém reagiu a ela ainda
+    # Ao inserir uma nova mensagem, atualiza os cargos de todos os membros
     guild = message.guild
     for member in guild.members:
         if not member.bot:
@@ -104,6 +104,22 @@ async def on_raw_reaction_remove(payload):
     member = guild.get_member(payload.user_id)
     if member:
         await update_user_role(member, guild)
+
+@bot.event
+async def on_raw_message_delete(payload):
+    # Este evento é disparado para mensagens removidas, mesmo que não estejam na cache
+    if payload.channel_id != CHANNEL_ID:
+        return
+
+    if payload.message_id in message_reactions:
+        del message_reactions[payload.message_id]
+        print(f'🗑️ Mensagem {payload.message_id} removida do rastreamento.')
+
+    # Após a remoção, atualiza os cargos para todos os membros
+    guild = bot.get_guild(payload.guild_id)
+    for member in guild.members:
+        if not member.bot:
+            await update_user_role(member, guild)
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens do canal e atualiza os cargos."""
