@@ -121,6 +121,7 @@ async def initialize_reactions():
     guild = bot.guilds[0]
     print(f"Guild ID: {guild.id}") # Verifica o ID da guilda
     await guild.fetch_roles() # Força a atualização da cache
+    await asyncio.sleep(2) # Adiciona um atraso maior
 
     channel = bot.get_channel(CHANNEL_ID)
 
@@ -139,9 +140,17 @@ async def initialize_reactions():
                     message_reactions[message.id].add(user.id)
                     role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
                     role_target = discord.utils.get(guild.roles, id=ROLE_ID)
+
                     if role_required and role_target:
-                        if role_required in user.roles:
-                            if all(user.id in reactions for reactions in message_reactions.values()):
+                        print(f"Cargo necessário: {role_required.name}, Cargo alvo: {role_target.name}") # Verifica os nomes dos cargos
+
+                        required_check = role_required in user.roles
+                        reactions_check = all(user.id in reactions for reactions in message_reactions.values())
+
+                        print(f"Verificação de cargo necessário: {required_check}, Verificação de reações: {reactions_check}") # Verifica as condições
+
+                        if required_check:
+                            if reactions_check:
                                 if role_target not in user.roles:
                                     try:
                                         await user.add_roles(role_target)
