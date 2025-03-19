@@ -17,6 +17,10 @@ intents.members = True
 intents.message_content = True
 intents.reactions = True
 
+class CustomBot(commands.Bot):
+    async def setup_hook(self):
+        await initialize_reactions()
+
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 # Dicionário para armazenar reações por mensagem
@@ -342,8 +346,6 @@ async def on_message_delete(message):
                         except Exception as e:
                             print(f'⚠️ Erro ao tentar remover o cargo de {member.name}: {e}')
 
-
-# Adiciona a função de inicialização no final do código
 async def initialize_reactions():
     """ Inicializa o rastreamento das mensagens e reações ao iniciar o bot. """
     await bot.wait_until_ready()  # Espera o bot estar pronto antes de executar
@@ -386,9 +388,8 @@ async def initialize_reactions():
                             print(f'⚠️ Erro ao tentar adicionar o cargo a {member.name}: {e}')
     else:
         print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
+# Adiciona a função de inicialização no final do código
 
-# Executar a função de inicialização assim que o bot estiver pronto
-bot.loop.create_task(initialize_reactions())
 
 # Inicia o bot
 bot.run(BOT_TOKEN)
