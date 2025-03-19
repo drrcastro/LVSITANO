@@ -15,9 +15,9 @@ CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
 # Configuração das intents necessárias para o bot funcionar corretamente
 intents = discord.Intents.default()
-intents.members = True   # Permite o bot interagir com membros
-intents.message_content = True   # Permite o bot acessar o conteúdo das mensagens
-intents.reactions = True   # Permite o bot monitorar reações
+intents.members = True  # Permite o bot interagir com membros
+intents.message_content = True  # Permite o bot acessar o conteúdo das mensagens
+intents.reactions = True  # Permite o bot monitorar reações
 
 # Inicializa o bot com o prefixo '!' para comandos
 bot = commands.Bot(command_prefix='!', intents=intents)
@@ -35,7 +35,7 @@ async def on_message(message):
     if message.author == bot.user:
         return  # Ignora mensagens enviadas pelo próprio bot
 
-    print(f'📩 Nova mensagem detectada: {message.id} no canal {message.channel.id}')
+    print(f' Nova mensagem detectada: {message.id} no canal {message.channel.id}')
 
     if message.channel.id == CHANNEL_ID and not message.author.bot:
         guild = message.guild
@@ -46,7 +46,7 @@ async def on_message(message):
                 if role in member.roles:
                     try:
                         await member.remove_roles(role)
-                        print(f'🚫 Cargo removido de {member.name}')
+                        print(f' Cargo removido de {member.name}')
                     except discord.Forbidden:
                         print(f'❌ Sem permissão para remover o cargo de {member.name}')
                     except Exception as e:
@@ -89,7 +89,7 @@ async def on_reaction_remove(reaction, user):
             if role and role in user.roles:
                 try:
                     await user.remove_roles(role)
-                    print(f'🚫 {user.name} perdeu o cargo {role.name}')
+                    print(f' {user.name} perdeu o cargo {role.name}')
                 except discord.Forbidden:
                     print(f'❌ Sem permissão para remover o cargo de {user.name}')
                 except Exception as e:
@@ -100,7 +100,7 @@ async def on_message_delete(message):
     if message.channel.id == CHANNEL_ID:
         if message.id in message_reactions:
             del message_reactions[message.id]
-            print(f'🗑️ Mensagem {message.id} apagada, removida do rastreamento.')
+            print(f'️ Mensagem {message.id} apagada, removida do rastreamento.')
 
         role = discord.utils.get(message.guild.roles, id=ROLE_ID)
         if role:
@@ -108,7 +108,7 @@ async def on_message_delete(message):
                 if role in member.roles and not all(member.id in reactions for reactions in message_reactions.values()):
                     try:
                         await member.remove_roles(role)
-                        print(f'🚫 {member.name} perdeu o cargo {role.name} após a exclusão de uma mensagem.')
+                        print(f' {member.name} perdeu o cargo {role.name} após a exclusão de uma mensagem.')
                     except discord.Forbidden:
                         print(f'❌ Sem permissão para remover o cargo de {member.name}')
                     except Exception as e:
@@ -127,15 +127,6 @@ async def initialize_reactions():
 
     if not channel:
         print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
-        return
-        
-    await asyncio.sleep(5)
-
-    role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
-    role_target = discord.utils.get(guild.roles, id=ROLE_ID)
-
-    if not role_required or not role_target:
-        print('⚠️ Cargos não encontrados após atraso. Verifique os IDs e permissões.')
         return
 
     print(' Inicializando rastreamento de mensagens e reações...')
@@ -170,7 +161,7 @@ async def initialize_reactions():
                                         print(f'⚠️ Erro ao adicionar o cargo a {user.name}: {e}')
                     else:
                         print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
-                        print(f"Cargo necessário encontrado: {role_required != None}, Cargo alvo encontrado: {role_target != None}") # Verifica se os cargos foram encontrados
+                        print(f"Cargo necessário encontrado: {role_required != None}, Cargo alvo encontrado: {role_target != None}")
 
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
 
