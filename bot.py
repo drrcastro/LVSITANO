@@ -134,10 +134,13 @@ async def initialize_reactions():
 
     async for message in channel.history(limit=100):
         message_reactions[message.id] = set()
+        print(f"Mensagem ID: {message.id}") # Verifica o ID da mensagem
         for reaction in message.reactions:
+            print(f"Reação: {reaction.emoji}") # Verifica o emoji da reação
             async for user in reaction.users():
                 if not user.bot:
                     message_reactions[message.id].add(user.id)
+                    print(f"Utilizador que reagiu: {user.name}") # Verifica o utilizador que reagiu
                     role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
                     role_target = discord.utils.get(guild.roles, id=ROLE_ID)
 
