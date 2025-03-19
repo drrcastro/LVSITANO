@@ -3,23 +3,25 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
-# Carregar variáveis de ambiente
+# Carregar variáveis de ambiente do arquivo .env
 load_dotenv()
 
+# Obtém os valores das variáveis de ambiente
 BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
 REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 
-# Configuração de intents
+# Configuração das intents necessárias para o bot funcionar corretamente
 intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-intents.reactions = True
+intents.members = True  # Permite o bot interagir com membros
+intents.message_content = True  # Permite o bot acessar o conteúdo das mensagens
+intents.reactions = True  # Permite o bot monitorar reações
 
+# Inicializa o bot com o prefixo '!' para comandos
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Dicionário para armazenar reações por mensagem
+# Dicionário que armazena reações por mensagem
 message_reactions = {}
 
 @bot.event
@@ -30,7 +32,7 @@ async def on_ready():
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
-        return
+        return  # Ignora mensagens enviadas pelo próprio bot
 
     print(f'📩 Nova mensagem detectada: {message.id} no canal {message.channel.id}')
     
@@ -49,9 +51,10 @@ async def on_message(message):
                     except Exception as e:
                         print(f'⚠️ Erro ao remover cargo de {member.name}: {e}')
         
+        # Inicializa a lista de reações para a nova mensagem
         message_reactions[message.id] = set()
 
-    await bot.process_commands(message)
+    await bot.process_commands(message)  # Permite que comandos do bot sejam processados
 
 @bot.event
 async def on_reaction_add(reaction, user):
@@ -60,6 +63,7 @@ async def on_reaction_add(reaction, user):
         
         message_reactions.setdefault(reaction.message.id, set()).add(user.id)
         
+        # Verifica se todas as mensagens possuem a reação do usuário
         if all(user.id in reactions for reactions in message_reactions.values()):
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
             if role and role not in user.roles:
@@ -78,6 +82,7 @@ async def on_reaction_remove(reaction, user):
 
         message_reactions.get(reaction.message.id, set()).discard(user.id)
         
+        # Se o usuário não reagiu a todas as mensagens, remove o cargo
         if not all(user.id in reactions for reactions in message_reactions.values()):
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
             if role and role in user.roles:
@@ -127,6 +132,8 @@ async def initialize_reactions():
                 if not user.bot:
                     message_reactions[message.id].add(user.id)
     
+    print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
+    
     role_required = discord.utils.get(guild.roles, id=REQUIRED_ROLE_ID)
     role_target = discord.utils.get(guild.roles, id=ROLE_ID)
     
@@ -145,4 +152,5 @@ async def initialize_reactions():
     else:
         print('⚠️ Cargo necessário ou cargo alvo não encontrados.')
 
+# Inicia o bot
 bot.run(BOT_TOKEN)
