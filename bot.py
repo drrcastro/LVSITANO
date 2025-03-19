@@ -13,7 +13,7 @@ REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
 
-# Configurar intents – certifique-se de habilitar "MESSAGE CONTENT INTENT" no portal do Discord
+# Configurar intents – lembre de habilitar "MESSAGE CONTENT INTENT" no portal do Discord
 intents = discord.Intents.default()
 intents.members = True
 intents.messages = True
@@ -107,7 +107,7 @@ async def on_raw_reaction_remove(payload):
 
 @bot.event
 async def on_raw_message_delete(payload):
-    # Este evento é disparado para mensagens removidas, mesmo que não estejam na cache
+    # Este evento é disparado mesmo para mensagens não cacheadas
     if payload.channel_id != CHANNEL_ID:
         return
 
@@ -115,7 +115,7 @@ async def on_raw_message_delete(payload):
         del message_reactions[payload.message_id]
         print(f'🗑️ Mensagem {payload.message_id} removida do rastreamento.')
 
-    # Após a remoção, atualiza os cargos para todos os membros
+    # Após a remoção, atualiza os cargos para todos os membros da guilda
     guild = bot.get_guild(payload.guild_id)
     for member in guild.members:
         if not member.bot:
@@ -142,13 +142,9 @@ async def initialize_reactions():
 
     print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
 
-    # Atualiza os cargos para todos os usuários que reagiram em alguma mensagem
-    all_user_ids = set()
-    for reactions in message_reactions.values():
-        all_user_ids.update(reactions)
-    for user_id in all_user_ids:
-        member = guild.get_member(user_id)
-        if member:
+    # Atualiza os cargos para TODOS os membros da guilda
+    for member in guild.members:
+        if not member.bot:
             await update_user_role(member, guild)
 
 bot.run(BOT_TOKEN)
