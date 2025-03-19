@@ -12,7 +12,13 @@ BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 ROLE_ID = int(os.getenv('DISCORD_ROLE_ID'))
 REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
-GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
+GUILD_ID_STR = os.getenv('DISCORD_GUILD_ID')
+
+if GUILD_ID_STR is None:
+    print("Erro: A variável de ambiente DISCORD_GUILD_ID não está definida.")
+    exit(1) # Finaliza o programa com código de erro
+
+GUILD_ID = int(GUILD_ID_STR)
 
 # Configuração das intents necessárias para o bot funcionar corretamente
 intents = discord.Intents.default()
@@ -83,9 +89,14 @@ async def on_reaction_remove(reaction, user):
         print(f'➖ {user.name} removeu reação da mensagem {reaction.message.id}')
 
         message_reactions.get(reaction.message.id, set()).discard(user.id)
+        print(f"Reações após remoção: {message_reactions}") # Verifica as reações após a remoção
 
         # Se o usuário não reagiu a todas as mensagens, remove o cargo
-        if not all(user.id in reactions for reactions in message_reactions.values()):
+        reactions_check = all(user.id in reactions for reactions in message_reactions.values())
+        print(f"Verificação de reações na remoção: {reactions_check}") # Verifica a condição de remoção
+        if not reactions_check:
+            guild = user.guild
+            await guild.fetch_roles() # Atualiza a cache
             role = discord.utils.get(user.guild.roles, id=ROLE_ID)
             if role and role in user.roles:
                 try:
