@@ -2,6 +2,7 @@ import asyncio
 import os
 import discord
 from discord.ext import commands
+from discord import app_commands
 from dotenv import load_dotenv
 
 # Carregar variáveis de ambiente do arquivo .env
@@ -21,6 +22,7 @@ intents.reactions = True
 intents.message_content = True
 
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
+tree = bot.tree  # Slash command handler
 
 # Dicionário que mapeia mensagens para usuários que reagiram
 message_reactions = {}  # { message_id: set(user_id) }
@@ -50,7 +52,13 @@ async def update_user_role(member, guild):
 @bot.event
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user}')
+    await bot.change_presence(activity=discord.Game(name="Monitorando reações"))
     await initialize_reactions()
+    try:
+        synced = await tree.sync(guild=discord.Object(id=GUILD_ID))
+        print(f'✅ {len(synced)} comandos de barra sincronizados!')
+    except Exception as e:
+        print(f'⚠️ Erro ao sincronizar comandos: {e}')
 
 @bot.event
 async def on_message(message):
@@ -84,12 +92,9 @@ async def on_raw_reaction_remove(payload):
     if member:
         await update_user_role(member, guild)
 
-@bot.command()
-async def status(ctx):
-    """Mostra o status das mensagens e reações monitoradas."""
-    if ctx.channel.id != CHANNEL_ID:
-        return
-
+@tree.command(name="status", description="Mostra o status das mensagens e reações monitoradas", guild=discord.Object(id=GUILD_ID))
+async def status(interaction: discord.Interaction):
+    """Slash command para mostrar status do rastreamento."""
     embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
     embed.add_field(name="📌 Mensagens Monitoradas", value=str(len(message_reactions)), inline=False)
     
@@ -98,8 +103,8 @@ async def status(ctx):
         details += f"📝 ID {msg_id}: {len(users)} reações\n"
     
     embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
-    await ctx.send(embed=embed)
-    print(f'📊 Comando !status solicitado por {ctx.author}')
+    await interaction.response.send_message(embed=embed)
+    print(f'📊 Comando /status solicitado por {interaction.user}')
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens."""
