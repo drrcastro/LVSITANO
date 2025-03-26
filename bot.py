@@ -123,12 +123,18 @@ async def status(interaction: discord.Interaction):
         
         def format_members(title, members_set):
             count = len(members_set)
-            members_list = "\n".join(member.display_name for member in members_set) if members_set else "Nenhum"
+            members_list = "\n".join(member.display_name for member in sorted(members_set, key=lambda m: m.display_name.lower())) if members_set else "Nenhum"
             return f"{title} ({count})", members_list
-        
-        embed.add_field(*format_members(f"✅ Membros {required_role.name} e {assigned_role.name}", ambos), inline=False)
-        embed.add_field(*format_members(f"❌ Membros {required_role.name} sem {assigned_role.name}", apenas_requisito), inline=False)
-        embed.add_field(*format_members(f"ℹ️ Membros apenas com {assigned_role.name}", apenas_atribuido), inline=False)
+
+        # Em seguida, ao adicionar os campos:
+        campo_ambos_title, campo_ambos_value = format_members(f"Membros ({required_role.name}) e ({assigned_role.name})", ambos)
+        campo_apenas_requisito_title, campo_apenas_requisito_value = format_members(f"Membros ({required_role.name}) sem ({assigned_role.name})", apenas_requisito)
+        campo_apenas_atribuido_title, campo_apenas_atribuido_value = format_members(f"Membros apenas com ({assigned_role.name})", apenas_atribuido)
+
+        embed.add_field(name=campo_ambos_title, value=campo_ambos_value, inline=False)
+        embed.add_field(name=campo_apenas_requisito_title, value=campo_apenas_requisito_value, inline=False)
+        embed.add_field(name=campo_apenas_atribuido_title, value=campo_apenas_atribuido_value, inline=False)
+
         
         await interaction.followup.send(embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
