@@ -27,6 +27,10 @@ tree = bot.tree  # Slash command handler
 # Dicionário que mapeia mensagens para usuários que reagiram
 message_reactions = {}  # { message_id: set(user_id) }
 
+def count_member_reactions(member_id: int) -> int:
+    """Retorna o número de mensagens que o membro reagiu, com base no dicionário message_reactions."""
+    return sum(1 for users in message_reactions.values() if member_id in users)
+
 async def check_user_reactions(user_id, guild):
     """Retorna True se o usuário reagiu a todas as mensagens monitoradas."""
     for reactions in message_reactions.values():
@@ -35,7 +39,7 @@ async def check_user_reactions(user_id, guild):
     return True
 
 async def update_user_role(member, guild):
-    """Adiciona ou remove o cargo conforme as reações."""
+    """Adiciona ou remove o cargo conforme as reações do membro."""
     role = guild.get_role(ROLE_ID)
     if not role:
         return
@@ -94,14 +98,16 @@ async def on_raw_reaction_remove(payload):
 
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
-    """Slash command para mostrar status do rastreamento, incluindo estatísticas de reações e roles."""
+    """Slash command para mostrar o status do rastreamento, incluindo estatísticas de reações e roles."""
     try:
         guild = interaction.guild
         total_msgs = len(message_reactions)
         
-        # Força a atualização dos cargos para os membros com o role requisito
+        # Buscar os roles uma vez
         required_role = guild.get_role(REQUIRED_ROLE_ID)
         assigned_role = guild.get_role(ROLE_ID)
+        
+        # Força a atualização dos cargos para os membros com o role requisito
         if required_role and assigned_role:
             for member in required_role.members:
                 await update_user_role(member, guild)
@@ -110,49 +116,36 @@ async def status(interaction: discord.Interaction):
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
         
         # Informações de reações por mensagem
-        details = ""
-        for msg_id, users in message_reactions.items():
-            details += f"📝 ID {msg_id}: {len(users)} reações\n"
+        details = "\n".join(f"📝 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items())
         embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
         
-        # Lista dos membros com o role requisito e sua contagem de reações
+        # Lista dos membros com o role requisito e sua contagem de reações (ordenados pelo display_name)
         if required_role:
-            membros_info = ""
-            for member in required_role.members:
-                # Conta quantas mensagens o membro reagiu
-                reacted = sum(1 for users in message_reactions.values() if member.id in users)
-                membros_info += f"{member.display_name} - {reacted}/{total_msgs}\n"
+            membros_info = "\n".join(
+                f"{member.display_name} - {count_member_reactions(member.id)}/{total_msgs}"
+                for member in sorted(required_role.members, key=lambda m: m.display_name.lower())
+            )
             membros_info = membros_info or "Nenhum membro com o role requisito encontrado."
         else:
             membros_info = "Role requisito não encontrado."
-        embed.add_field(name="👥 Membros " + (required_role.name if required_role else "N/D") + ":", value=membros_info, inline=False)
+        embed.add_field(name=f"👥 Membros {required_role.name if required_role else 'N/D'}:", value=membros_info, inline=False)
         
-        # Categorias de roles com nomes customizados
-        if not required_role:
-            required_role_members = set()
-        else:
-            required_role_members = set(required_role.members)
-        if not assigned_role:
-            assigned_role_members = set()
-        else:
-            assigned_role_members = set(assigned_role.members)
+        # Preparar conjuntos de membros para as categorias de roles
+        required_role_members = set(required_role.members) if required_role else set()
+        assigned_role_members = set(assigned_role.members) if assigned_role else set()
         
-        # Membros com ambos os roles
         ambos = required_role_members & assigned_role_members
-        # Membros com o role requisito e sem o role atribuído
         apenas_requisito = required_role_members - assigned_role_members
-        # Membros apenas com o role atribuído (fora do requisito)
         apenas_atribuido = assigned_role_members - required_role_members
         
         def format_members(members_set):
             if not members_set:
                 return "Nenhum"
-            return "\n".join(member.display_name for member in members_set)
+            return "\n".join(sorted((member.display_name for member in members_set), key=str.lower))
         
-        # Altera os nomes dos campos para exibir os nomes reais dos roles
         campo_ambos = f"Membros {required_role.name if required_role else 'N/D'} e {assigned_role.name if assigned_role else 'N/D'}"
         campo_apenas_requisito = f"Membros {required_role.name if required_role else 'N/D'} sem {assigned_role.name if assigned_role else 'N/D'}"
-        campo_apenas_atribuido = f"Membros apenas com ({assigned_role.name if assigned_role else 'N/D'})"
+        campo_apenas_atribuido = f"Membros apenas com {assigned_role.name if assigned_role else 'N/D'}"
         
         embed.add_field(name="✅ " + campo_ambos, value=format_members(ambos), inline=False)
         embed.add_field(name="❌ " + campo_apenas_requisito, value=format_members(apenas_requisito), inline=False)
