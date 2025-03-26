@@ -96,9 +96,6 @@ async def on_raw_reaction_remove(payload):
 async def status(interaction: discord.Interaction):
     """Slash command para mostrar status do rastreamento."""
     try:
-        # Defer a resposta para ganhar mais tempo (o Discord espera uma resposta inicial em até 3 segundos)
-        await interaction.response.defer()
-        
         embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(len(message_reactions)), inline=False)
         
@@ -108,15 +105,11 @@ async def status(interaction: discord.Interaction):
         
         embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
         
-        # Envia a resposta com o followup
-        await interaction.followup.send(embed=embed)
+        # Responde imediatamente sem deferral
+        await interaction.response.send_message(embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
     except Exception as e:
         print(f"⚠️ Erro no comando /status: {e}")
-        # Caso a interação ainda não tenha sido respondida, enviar uma mensagem de erro
-        if not interaction.response.is_done():
-            await interaction.response.send_message("Ocorreu um erro ao processar o comando.", ephemeral=True)
-
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens."""
