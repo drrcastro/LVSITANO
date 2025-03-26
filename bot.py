@@ -92,9 +92,9 @@ async def on_raw_reaction_remove(payload):
     if member:
         await update_user_role(member, guild)
 
-@tree.command(name="status", description="Mostra o status das mensagens e reações monitoradas", guild=discord.Object(id=GUILD_ID))
+@tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
-    """Slash command para mostrar status do rastreamento, incluindo membros com o role requisito."""
+    """Slash command para mostrar status do rastreamento, incluindo estatísticas de reações e roles."""
     try:
         guild = interaction.guild
         total_msgs = len(message_reactions)
@@ -102,24 +102,52 @@ async def status(interaction: discord.Interaction):
         embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
         
+        # Informações de reações por mensagem
         details = ""
         for msg_id, users in message_reactions.items():
             details += f"📝 ID {msg_id}: {len(users)} reações\n"
         embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
         
-        # Listar membros que possuem o role requisito
+        # Lista dos membros com o role requisito e sua contagem de reações
         required_role = guild.get_role(REQUIRED_ROLE_ID)
         if required_role:
             membros_info = ""
             for member in required_role.members:
-                # Contar quantas mensagens o membro reagiu
+                # Conta quantas mensagens o membro reagiu
                 reacted = sum(1 for users in message_reactions.values() if member.id in users)
                 membros_info += f"{member.display_name} - {reacted}/{total_msgs}\n"
             membros_info = membros_info or "Nenhum membro com o role requisito encontrado."
         else:
             membros_info = "Role requisito não encontrado."
-        
         embed.add_field(name="👥 Membros com o role requisito:", value=membros_info, inline=False)
+        
+        # Categorias de roles
+        assigned_role = guild.get_role(ROLE_ID)
+        # Verifica se os roles foram encontrados
+        if not required_role:
+            required_role_members = set()
+        else:
+            required_role_members = set(required_role.members)
+        if not assigned_role:
+            assigned_role_members = set()
+        else:
+            assigned_role_members = set(assigned_role.members)
+        
+        # Membros com ambos os roles
+        ambos = required_role_members & assigned_role_members
+        # Membros com o role requisito e sem o role atribuído
+        apenas_requisito = required_role_members - assigned_role_members
+        # Membros apenas com o role atribuído
+        apenas_atribuido = assigned_role_members - required_role_members
+        
+        def format_members(members_set):
+            if not members_set:
+                return "Nenhum"
+            return "\n".join(member.display_name for member in members_set)
+        
+        embed.add_field(name="✅ Membros com o role requisito e o role atribuído:", value=format_members(ambos), inline=False)
+        embed.add_field(name="❌ Membros com o role requisito e sem o role atribuído:", value=format_members(apenas_requisito), inline=False)
+        embed.add_field(name="ℹ️ Membros apenas com o role atribuído:", value=format_members(apenas_atribuido), inline=False)
         
         await interaction.response.send_message(embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
@@ -127,7 +155,6 @@ async def status(interaction: discord.Interaction):
         print(f"⚠️ Erro no comando /status: {e}")
         if not interaction.response.is_done():
             await interaction.response.send_message("Ocorreu um erro ao processar o comando.", ephemeral=True)
-
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens."""
