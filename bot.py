@@ -45,7 +45,7 @@ async def update_user_role(member, guild):
     else:
         if role in member.roles:
             await member.remove_roles(role)
-            print(f'❌ {member} perdeu o cargo {role.name}')
+            print(f'❌ {member} perdeu o cargo {role.name} porque deixou de reagir a uma das mensagens monitoradas.')
 
 @bot.event
 async def on_ready():
@@ -58,6 +58,7 @@ async def on_raw_reaction_add(payload):
         return
 
     message_reactions.setdefault(payload.message_id, set()).add(payload.user_id)
+    print(f'➕ Usuário {payload.user_id} adicionou reação na mensagem {payload.message_id}')
     guild = bot.get_guild(payload.guild_id)
     member = guild.get_member(payload.user_id)
     if member:
@@ -71,7 +72,8 @@ async def on_raw_reaction_remove(payload):
     guild = bot.get_guild(payload.guild_id)
     if payload.message_id in message_reactions:
         message_reactions[payload.message_id].discard(payload.user_id)
-
+        print(f'➖ Usuário {payload.user_id} removeu reação da mensagem {payload.message_id}')
+    
     member = guild.get_member(payload.user_id)
     if member:
         await update_user_role(member, guild)
@@ -91,6 +93,7 @@ async def status(ctx):
     
     embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
     await ctx.send(embed=embed)
+    print(f'📊 Comando !status solicitado por {ctx.author}')
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens."""
