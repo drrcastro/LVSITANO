@@ -99,6 +99,16 @@ async def status(interaction: discord.Interaction):
         guild = interaction.guild
         total_msgs = len(message_reactions)
         
+        # Força a atualização dos cargos para os membros com o role requisito
+        required_role = guild.get_role(REQUIRED_ROLE_ID)
+        assigned_role = guild.get_role(ROLE_ID)
+        if required_role and assigned_role:
+            for member in required_role.members:
+                await update_user_role(member, guild)
+        
+        # Recarrega os roles a partir do cache atualizado
+        # (Isso é opcional, pois o objeto 'member' já deve ter os roles atualizados)
+        
         embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
         
@@ -109,7 +119,6 @@ async def status(interaction: discord.Interaction):
         embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
         
         # Lista dos membros com o role requisito e sua contagem de reações
-        required_role = guild.get_role(REQUIRED_ROLE_ID)
         if required_role:
             membros_info = ""
             for member in required_role.members:
@@ -122,8 +131,6 @@ async def status(interaction: discord.Interaction):
         embed.add_field(name="👥 Membros com o role requisito:", value=membros_info, inline=False)
         
         # Categorias de roles
-        assigned_role = guild.get_role(ROLE_ID)
-        # Verifica se os roles foram encontrados
         if not required_role:
             required_role_members = set()
         else:
@@ -137,7 +144,7 @@ async def status(interaction: discord.Interaction):
         ambos = required_role_members & assigned_role_members
         # Membros com o role requisito e sem o role atribuído
         apenas_requisito = required_role_members - assigned_role_members
-        # Membros apenas com o role atribuído
+        # Membros apenas com o role atribuído (fora do requisito)
         apenas_atribuido = assigned_role_members - required_role_members
         
         def format_members(members_set):
@@ -155,6 +162,7 @@ async def status(interaction: discord.Interaction):
         print(f"⚠️ Erro no comando /status: {e}")
         if not interaction.response.is_done():
             await interaction.response.send_message("Ocorreu um erro ao processar o comando.", ephemeral=True)
+
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens."""
