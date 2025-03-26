@@ -20,7 +20,7 @@ intents.messages = True
 intents.reactions = True
 intents.message_content = True
 
-bot = commands.Bot(command_prefix='!', intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=None)
 
 # Dicionário que mapeia mensagens para usuários que reagiram
 message_reactions = {}  # { message_id: set(user_id) }
@@ -51,6 +51,12 @@ async def update_user_role(member, guild):
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user}')
     await initialize_reactions()
+
+@bot.event
+async def on_message(message):
+    if message.author == bot.user:
+        return
+    await bot.process_commands(message)  # Garante que os comandos sejam processados corretamente
 
 @bot.event
 async def on_raw_reaction_add(payload):
