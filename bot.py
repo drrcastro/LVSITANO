@@ -96,12 +96,16 @@ async def on_raw_reaction_remove(payload):
 async def status(interaction: discord.Interaction):
     """Slash command para mostrar status do rastreamento, incluindo estatísticas de reações e roles."""
     try:
+        # Defer para ganhar tempo
         await interaction.response.defer()
         guild = interaction.guild
         total_msgs = len(message_reactions)
         
+        # Buscar os roles uma vez
         required_role = guild.get_role(REQUIRED_ROLE_ID)
         assigned_role = guild.get_role(ROLE_ID)
+        
+        # Força a atualização dos cargos para os membros com o role requisito
         if required_role and assigned_role:
             for member in required_role.members:
                 await update_user_role(member, guild)
@@ -109,11 +113,22 @@ async def status(interaction: discord.Interaction):
         embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
         
-        details = ""
-        for msg_id, users in message_reactions.items():
-            details += f"📝 ID {msg_id}: {len(users)} reações\n"
+        # Informações de reações por mensagem
+        details = "\n".join(f"📝 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items())
         embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
         
+        # Lista completa dos membros com o role requisito e suas contagens (X/Y)
+        if required_role:
+            membros_info = "\n".join(
+                f"{member.display_name} - {sum(1 for users in message_reactions.values() if member.id in users)}/{total_msgs}"
+                for member in sorted(required_role.members, key=lambda m: m.display_name.lower())
+            )
+            membros_info = membros_info or "Nenhum membro com o role requisito encontrado."
+        else:
+            membros_info = "Role requisito não encontrado."
+        embed.add_field(name=f"👥 Membros {required_role.name if required_role else 'N/D'}:", value=membros_info, inline=False)
+        
+        # Preparar conjuntos de membros para as categorias
         required_role_members = set(required_role.members) if required_role else set()
         assigned_role_members = set(assigned_role.members) if assigned_role else set()
         
@@ -121,26 +136,27 @@ async def status(interaction: discord.Interaction):
         apenas_requisito = required_role_members - assigned_role_members
         apenas_atribuido = assigned_role_members - required_role_members
         
+        # Função auxiliar para formatar os campos com contador
         def format_members(title, members_set):
             count = len(members_set)
-            members_list = "\n".join(member.display_name for member in sorted(members_set, key=lambda m: m.display_name.lower())) if members_set else "Nenhum"
+            members_list = "\n".join(sorted((member.display_name for member in members_set), key=str.lower)) if members_set else "Nenhum"
             return f"{title} ({count})", members_list
-
-        # Em seguida, ao adicionar os campos:
-        campo_ambos_title, campo_ambos_value = format_members(f"Membros ({required_role.name}) e ({assigned_role.name})", ambos)
-        campo_apenas_requisito_title, campo_apenas_requisito_value = format_members(f"Membros ({required_role.name}) sem ({assigned_role.name})", apenas_requisito)
-        campo_apenas_atribuido_title, campo_apenas_atribuido_value = format_members(f"Membros apenas com ({assigned_role.name})", apenas_atribuido)
-
+        
+        # Campos com os nomes reais dos roles e contador de membros
+        campo_ambos_title, campo_ambos_value = format_members(f"✅ Membros {required_role.name if required_role else 'N/D'} e {assigned_role.name if assigned_role else 'N/D'}", ambos)
+        campo_apenas_requisito_title, campo_apenas_requisito_value = format_members(f"❌ Membros {required_role.name if required_role else 'N/D'} sem {assigned_role.name if assigned_role else 'N/D'}", apenas_requisito)
+        campo_apenas_atribuido_title, campo_apenas_atribuido_value = format_members(f"ℹ️ Membros apenas com {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
+        
         embed.add_field(name=campo_ambos_title, value=campo_ambos_value, inline=False)
         embed.add_field(name=campo_apenas_requisito_title, value=campo_apenas_requisito_value, inline=False)
         embed.add_field(name=campo_apenas_atribuido_title, value=campo_apenas_atribuido_value, inline=False)
-
         
         await interaction.followup.send(embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
     except Exception as e:
         print(f"⚠️ Erro no comando /status: {e}")
         await interaction.followup.send("Ocorreu um erro ao processar o comando.", ephemeral=True)
+
 
 async def initialize_reactions():
     await bot.wait_until_ready()
