@@ -106,9 +106,6 @@ async def status(interaction: discord.Interaction):
             for member in required_role.members:
                 await update_user_role(member, guild)
         
-        # Recarrega os roles a partir do cache atualizado
-        # (Isso é opcional, pois o objeto 'member' já deve ter os roles atualizados)
-        
         embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
         
@@ -128,9 +125,9 @@ async def status(interaction: discord.Interaction):
             membros_info = membros_info or "Nenhum membro com o role requisito encontrado."
         else:
             membros_info = "Role requisito não encontrado."
-        embed.add_field(name="👥 Membros com o role requisito:", value=membros_info, inline=False)
+        embed.add_field(name="👥 Membros com o role " + (required_role.name if required_role else "N/D") + ":", value=membros_info, inline=False)
         
-        # Categorias de roles
+        # Categorias de roles com nomes customizados
         if not required_role:
             required_role_members = set()
         else:
@@ -152,9 +149,14 @@ async def status(interaction: discord.Interaction):
                 return "Nenhum"
             return "\n".join(member.display_name for member in members_set)
         
-        embed.add_field(name="✅ Membros com o role requisito e o role atribuído:", value=format_members(ambos), inline=False)
-        embed.add_field(name="❌ Membros com o role requisito e sem o role atribuído:", value=format_members(apenas_requisito), inline=False)
-        embed.add_field(name="ℹ️ Membros apenas com o role atribuído:", value=format_members(apenas_atribuido), inline=False)
+        # Altera os nomes dos campos para exibir os nomes reais dos roles
+        campo_ambos = f"Membros ({required_role.name if required_role else 'N/D'}) e ({assigned_role.name if assigned_role else 'N/D'})"
+        campo_apenas_requisito = f"Membros ({required_role.name if required_role else 'N/D'}) sem ({assigned_role.name if assigned_role else 'N/D'})"
+        campo_apenas_atribuido = f"Membros apenas com ({assigned_role.name if assigned_role else 'N/D'})"
+        
+        embed.add_field(name="✅ " + campo_ambos, value=format_members(ambos), inline=False)
+        embed.add_field(name="❌ " + campo_apenas_requisito, value=format_members(apenas_requisito), inline=False)
+        embed.add_field(name="ℹ️ " + campo_apenas_atribuido, value=format_members(apenas_atribuido), inline=False)
         
         await interaction.response.send_message(embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
@@ -162,7 +164,6 @@ async def status(interaction: discord.Interaction):
         print(f"⚠️ Erro no comando /status: {e}")
         if not interaction.response.is_done():
             await interaction.response.send_message("Ocorreu um erro ao processar o comando.", ephemeral=True)
-
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens."""
