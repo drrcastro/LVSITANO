@@ -94,22 +94,40 @@ async def on_raw_reaction_remove(payload):
 
 @tree.command(name="status", description="Mostra o status das mensagens e reações monitoradas", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
-    """Slash command para mostrar status do rastreamento."""
+    """Slash command para mostrar status do rastreamento, incluindo membros com o role requisito."""
     try:
+        guild = interaction.guild
+        total_msgs = len(message_reactions)
+        
         embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
-        embed.add_field(name="📌 Mensagens Monitoradas", value=str(len(message_reactions)), inline=False)
+        embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
         
         details = ""
         for msg_id, users in message_reactions.items():
             details += f"📝 ID {msg_id}: {len(users)} reações\n"
-        
         embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
         
-        # Responde imediatamente sem deferral
+        # Listar membros que possuem o role requisito
+        required_role = guild.get_role(REQUIRED_ROLE_ID)
+        if required_role:
+            membros_info = ""
+            for member in required_role.members:
+                # Contar quantas mensagens o membro reagiu
+                reacted = sum(1 for users in message_reactions.values() if member.id in users)
+                membros_info += f"{member.display_name} - {reacted}/{total_msgs}\n"
+            membros_info = membros_info or "Nenhum membro com o role requisito encontrado."
+        else:
+            membros_info = "Role requisito não encontrado."
+        
+        embed.add_field(name="👥 Membros com o role requisito:", value=membros_info, inline=False)
+        
         await interaction.response.send_message(embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
     except Exception as e:
         print(f"⚠️ Erro no comando /status: {e}")
+        if not interaction.response.is_done():
+            await interaction.response.send_message("Ocorreu um erro ao processar o comando.", ephemeral=True)
+
 
 async def initialize_reactions():
     """Carrega as reações das últimas 100 mensagens."""
