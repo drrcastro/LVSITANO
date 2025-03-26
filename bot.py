@@ -125,7 +125,7 @@ async def status(interaction: discord.Interaction):
             membros_info = membros_info or "Nenhum membro com o role requisito encontrado."
         else:
             membros_info = "Role requisito não encontrado."
-        embed.add_field(name="👥 Membros com o role " + (required_role.name if required_role else "N/D") + ":", value=membros_info, inline=False)
+        embed.add_field(name="👥 Membros " + (required_role.name if required_role else "N/D") + ":", value=membros_info, inline=False)
         
         # Categorias de roles com nomes customizados
         if not required_role:
@@ -150,8 +150,8 @@ async def status(interaction: discord.Interaction):
             return "\n".join(member.display_name for member in members_set)
         
         # Altera os nomes dos campos para exibir os nomes reais dos roles
-        campo_ambos = f"Membros ({required_role.name if required_role else 'N/D'}) e ({assigned_role.name if assigned_role else 'N/D'})"
-        campo_apenas_requisito = f"Membros ({required_role.name if required_role else 'N/D'}) sem ({assigned_role.name if assigned_role else 'N/D'})"
+        campo_ambos = f"Membros {required_role.name if required_role else 'N/D'} e {assigned_role.name if assigned_role else 'N/D'}"
+        campo_apenas_requisito = f"Membros {required_role.name if required_role else 'N/D'} sem {assigned_role.name if assigned_role else 'N/D'}"
         campo_apenas_atribuido = f"Membros apenas com ({assigned_role.name if assigned_role else 'N/D'})"
         
         embed.add_field(name="✅ " + campo_ambos, value=format_members(ambos), inline=False)
