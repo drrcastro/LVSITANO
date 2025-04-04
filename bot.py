@@ -53,12 +53,32 @@ async def update_user_role(member, guild):
 async def on_ready():
     print(f'✅ Bot conectado como {bot.user}')
     await bot.change_presence(activity=discord.Game(name="Monitorando reações"))
+
+    # Passo 1: Inicializar reações
     await initialize_reactions()
+
+    # Passo 2: Sincronizar comandos de barra
     try:
         synced = await tree.sync(guild=discord.Object(id=GUILD_ID))
         print(f'✅ {len(synced)} comandos de barra sincronizados!')
     except Exception as e:
         print(f'⚠️ Erro ao sincronizar comandos: {e}')
+
+    # Passo 3: Atualizar cargos dos membros com o role obrigatório
+    try:
+        guild = bot.get_guild(GUILD_ID)
+        required_role = guild.get_role(REQUIRED_ROLE_ID)
+
+        if required_role:
+            print(f'🔄 Atualizando cargos de {len(required_role.members)} membros com o role obrigatório...')
+            for member in required_role.members:
+                await update_user_role(member, guild)
+            print(f'✅ Cargos atualizados após inicialização.')
+        else:
+            print(f'⚠️ Role obrigatório com ID {REQUIRED_ROLE_ID} não encontrado.')
+    except Exception as e:
+        print(f'⚠️ Erro ao atualizar cargos no on_ready: {e}')
+
 
 @bot.event
 async def on_message(message):
