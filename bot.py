@@ -156,7 +156,7 @@ async def on_raw_message_delete(payload):
 
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
-    await interaction.response.defer()
+    await interaction.response.defer(thinking=True)
     try:
         guild = interaction.guild
         total_msgs = len(message_reactions)
