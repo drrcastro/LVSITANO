@@ -157,16 +157,28 @@ async def on_raw_message_delete(payload):
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
     try:
-        # Tentar deferir primeiro
-        if not interaction.response.is_done():
-            await interaction.response.defer(thinking=True)
-        
+        # Resposta inicial imediata
+        await interaction.response.send_message("🔄 A processar status...")
+        followup_msg = await interaction.original_response()
+
+        # Simula barra de progresso
+        etapas = [
+            "🔄 A processar status...",
+            "⏳ Etapa 1/3: A recolher mensagens monitoradas...",
+            "⏳ Etapa 2/3: A contar reações...",
+            "⏳ Etapa 3/3: A verificar membros e cargos...",
+            "✅ A gerar relatório final..."
+        ]
+        for etapa in etapas:
+            await followup_msg.edit(content=etapa)
+            await asyncio.sleep(1.5)  # Pequena pausa para simular processamento
+
         guild = interaction.guild
         total_msgs = len(message_reactions)
         required_role = guild.get_role(REQUIRED_ROLE_ID)
         assigned_role = guild.get_role(ROLE_ID)
 
-        embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.blue())
+        embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.green())
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
 
         details = "\n".join(f"📝 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items())
@@ -200,16 +212,15 @@ async def status(interaction: discord.Interaction):
         ]:
             embed.add_field(name=title, value=members, inline=False)
 
-        await interaction.followup.send(embed=embed)
+        await followup_msg.edit(content=None, embed=embed)  # Limpa texto e mostra o embed final
         print(f'📊 Comando /status solicitado por {interaction.user}')
 
-    except discord.errors.NotFound:
-        print("⚠️ A interação expirou antes de poder responder.")
     except Exception as e:
-        print(f"⚠️ Erro no comando /status: {e}")
-        if not interaction.response.is_done():
-            await interaction.response.send_message("Ocorreu um erro ao processar o comando.", ephemeral=True)
-
+        print(f"⚠️ Erro ao processar o comando /status: {e}")
+        try:
+            await interaction.followup.send("❌ Ocorreu um erro ao processar o status.")
+        except Exception:
+            pass
 
 # --- INICIAR BOT ---
 bot.run(BOT_TOKEN)
