@@ -115,6 +115,20 @@ async def handle_new_message(message):
         message_reactions[message.id] = set()
         print(f'📩 Nova mensagem adicionada para monitorização: {message.id}')
 
+async def handle_message_delete(payload):
+    if payload.channel_id != CHANNEL_ID:
+        return
+
+    if payload.message_id in message_reactions:
+        del message_reactions[payload.message_id]
+        print(f'🗑️ Mensagem {payload.message_id} foi apagada e removida do rastreamento.')
+
+    guild = bot.get_guild(payload.guild_id)
+    required_role = guild.get_role(REQUIRED_ROLE_ID)
+    if required_role:
+        for member in required_role.members:
+            await update_user_role(member)
+
 # --- EVENTOS ---
 
 @bot.event
@@ -133,6 +147,10 @@ async def on_raw_reaction_add(payload):
 @bot.event
 async def on_raw_reaction_remove(payload):
     await handle_reaction_remove(payload)
+
+@bot.event
+async def on_raw_message_delete(payload):
+    await handle_message_delete(payload)
 
 # --- COMANDO /STATUS ---
 
@@ -173,7 +191,7 @@ async def status(interaction: discord.Interaction):
             return f"{title} ({count})", members_list
 
         for title, members in [
-            format_members(f"✅ Membros com ambos roles", ambos),
+            format_members("✅ Membros com ambos roles", ambos),
             format_members(f"❌ Membros apenas com {required_role.name if required_role else 'N/D'}", apenas_requisito),
             format_members(f"ℹ️ Membros apenas com {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
         ]:
