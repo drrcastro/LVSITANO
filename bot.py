@@ -157,25 +157,23 @@ async def on_raw_message_delete(payload):
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
     try:
-        # Responder imediatamente para evitar timeout (isso "acknowledges" a interação)
-        await interaction.response.send_message("🔄 A processar status...")
-
-        # Agora qualquer outra mensagem deve ir por followup
+        # Acknowledge imediatamente a interação para evitar timeout
+        await interaction.response.defer(thinking=True)
         followup_msg = await interaction.original_response()
 
-        # Simula barra de progresso com edições sequenciais
+        # Simula uma barra de progresso com delays mais curtos
         etapas = [
             "🔄 A processar status...",
-            "⏳ Etapa 1/3: A recolher mensagens monitoradas...",
-            "⏳ Etapa 2/3: A contar reações...",
-            "⏳ Etapa 3/3: A verificar membros e cargos...",
-            "✅ A gerar relatório final..."
+            "⏳ Etapa 1/3: Recolher mensagens monitoradas...",
+            "⏳ Etapa 2/3: Contar reações...",
+            "⏳ Etapa 3/3: Verificar membros e cargos...",
+            "✅ Gerando relatório final..."
         ]
         for etapa in etapas:
             await followup_msg.edit(content=etapa)
-            await asyncio.sleep(1.5)  # Espera artificial
+            await asyncio.sleep(0.5)  # Delay reduzido (0.5 segundos)
 
-        # Coleta de dados
+        # Coleta dos dados para o relatório
         guild = interaction.guild
         total_msgs = len(message_reactions)
         required_role = guild.get_role(REQUIRED_ROLE_ID)
@@ -209,27 +207,27 @@ async def status(interaction: discord.Interaction):
             return f"{title} ({count})", members_list
 
         for title, members in [
-            format_members(f"✅ Membros com ambos roles", ambos),
+            format_members("✅ Membros com ambos roles", ambos),
             format_members(f"❌ Membros apenas com {required_role.name if required_role else 'N/D'}", apenas_requisito),
             format_members(f"ℹ️ Membros apenas com {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
         ]:
             embed.add_field(name=title, value=members, inline=False)
 
-        # Substitui a mensagem final
+        # Envia o embed final (substituindo o texto da mensagem de followup)
         await followup_msg.edit(content=None, embed=embed)
-
         print(f'📊 Comando /status solicitado por {interaction.user}')
 
-    except discord.NotFound as e:
-        print(f"⚠️ Erro ao processar o comando /status: {e} (mensagem ou interação não encontrada)")
+    except discord.errors.NotFound as e:
+        print(f"⚠️ Erro: interação não encontrada - {e}")
     except discord.HTTPException as e:
-        print(f"⚠️ Erro HTTP ao tentar responder: {e}")
+        print(f"⚠️ Erro HTTP: {e}")
     except Exception as e:
         print(f"⚠️ Erro inesperado: {e}")
         try:
             await interaction.followup.send("❌ Ocorreu um erro ao processar o status.")
-        except:
+        except Exception:
             pass
+
 
 
 # --- INICIAR BOT ---
