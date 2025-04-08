@@ -75,7 +75,7 @@ async def update_all_roles():
 
 async def handle_on_ready():
     print(f'✅ Bot conectado como {bot.user}')
-    await bot.change_presence(activity=discord.Game(name="Monitorando reações"))
+    await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="the Notes"))
     await initialize_reactions()
     await update_all_roles()
 
