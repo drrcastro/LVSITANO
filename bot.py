@@ -157,11 +157,13 @@ async def on_raw_message_delete(payload):
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
     try:
-        # Resposta inicial imediata
+        # Responder imediatamente para evitar timeout (isso "acknowledges" a interação)
         await interaction.response.send_message("🔄 A processar status...")
+
+        # Agora qualquer outra mensagem deve ir por followup
         followup_msg = await interaction.original_response()
 
-        # Simula barra de progresso
+        # Simula barra de progresso com edições sequenciais
         etapas = [
             "🔄 A processar status...",
             "⏳ Etapa 1/3: A recolher mensagens monitoradas...",
@@ -171,8 +173,9 @@ async def status(interaction: discord.Interaction):
         ]
         for etapa in etapas:
             await followup_msg.edit(content=etapa)
-            await asyncio.sleep(1.5)  # Pequena pausa para simular processamento
+            await asyncio.sleep(1.5)  # Espera artificial
 
+        # Coleta de dados
         guild = interaction.guild
         total_msgs = len(message_reactions)
         required_role = guild.get_role(REQUIRED_ROLE_ID)
@@ -212,15 +215,22 @@ async def status(interaction: discord.Interaction):
         ]:
             embed.add_field(name=title, value=members, inline=False)
 
-        await followup_msg.edit(content=None, embed=embed)  # Limpa texto e mostra o embed final
+        # Substitui a mensagem final
+        await followup_msg.edit(content=None, embed=embed)
+
         print(f'📊 Comando /status solicitado por {interaction.user}')
 
+    except discord.NotFound as e:
+        print(f"⚠️ Erro ao processar o comando /status: {e} (mensagem ou interação não encontrada)")
+    except discord.HTTPException as e:
+        print(f"⚠️ Erro HTTP ao tentar responder: {e}")
     except Exception as e:
-        print(f"⚠️ Erro ao processar o comando /status: {e}")
+        print(f"⚠️ Erro inesperado: {e}")
         try:
             await interaction.followup.send("❌ Ocorreu um erro ao processar o status.")
-        except Exception:
+        except:
             pass
+
 
 # --- INICIAR BOT ---
 bot.run(BOT_TOKEN)
