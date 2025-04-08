@@ -156,8 +156,11 @@ async def on_raw_message_delete(payload):
 
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
-    await interaction.response.defer(thinking=True)
     try:
+        # Tentar deferir primeiro
+        if not interaction.response.is_done():
+            await interaction.response.defer(thinking=True)
+        
         guild = interaction.guild
         total_msgs = len(message_reactions)
         required_role = guild.get_role(REQUIRED_ROLE_ID)
@@ -191,7 +194,7 @@ async def status(interaction: discord.Interaction):
             return f"{title} ({count})", members_list
 
         for title, members in [
-            format_members("✅ Membros com ambos roles", ambos),
+            format_members(f"✅ Membros com ambos roles", ambos),
             format_members(f"❌ Membros apenas com {required_role.name if required_role else 'N/D'}", apenas_requisito),
             format_members(f"ℹ️ Membros apenas com {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
         ]:
@@ -200,9 +203,13 @@ async def status(interaction: discord.Interaction):
         await interaction.followup.send(embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
 
+    except discord.errors.NotFound:
+        print("⚠️ A interação expirou antes de poder responder.")
     except Exception as e:
         print(f"⚠️ Erro no comando /status: {e}")
-        await interaction.followup.send("Ocorreu um erro ao processar o comando.", ephemeral=True)
+        if not interaction.response.is_done():
+            await interaction.response.send_message("Ocorreu um erro ao processar o comando.", ephemeral=True)
+
 
 # --- INICIAR BOT ---
 bot.run(BOT_TOKEN)
