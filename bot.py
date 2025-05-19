@@ -3,6 +3,7 @@ import os
 import discord
 from discord.ext import commands
 from discord import app_commands
+from discord.ui import View, Button
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,15 +39,12 @@ async def update_user_role(member):
     if not role or not required_role:
         return
 
-    # Verifica se o membro tem o cargo requisito
     if required_role not in member.roles:
-        # Se não tem o cargo requisito, remove o cargo Note Reader se tiver
         if role in member.roles:
             await member.remove_roles(role)
             print(f'❌ {member} perdeu o cargo {role.name} (sem cargo requisito)')
         return
 
-    # Se tem o cargo de requisito, então avalia as reações
     if await check_user_reactions(member.id):
         if role not in member.roles:
             await member.add_roles(role)
@@ -59,6 +57,9 @@ async def update_user_role(member):
 async def initialize_reactions():
     await bot.wait_until_ready()
     guild = bot.get_guild(GUILD_ID)
+    if not guild:
+        print(f'⚠️ Guild com ID {GUILD_ID} não encontrada!')
+        return
     channel = guild.get_channel(CHANNEL_ID)
     if not channel:
         print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
@@ -78,12 +79,18 @@ async def initialize_reactions():
 
 async def update_all_roles():
     guild = bot.get_guild(GUILD_ID)
+    if not guild:
+        print(f'⚠️ Guild com ID {GUILD_ID} não encontrada!')
+        return
     for member in guild.members:
         await update_user_role(member)
 
 async def handle_on_ready():
     print(f'✅ Bot conectado como {bot.user}')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="the Notes"))
+    print("Guilds conectadas:")
+    for g in bot.guilds:
+        print(f"- {g.name} (ID: {g.id})")
     await initialize_reactions()
     await update_all_roles()
 
@@ -101,6 +108,9 @@ async def handle_reaction_add(payload):
     print(f'➕ Usuário {payload.user_id} adicionou reação na mensagem {payload.message_id}')
 
     guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        print(f'⚠️ Guild com ID {payload.guild_id} não encontrada!')
+        return
     member = guild.get_member(payload.user_id)
     if member:
         await update_user_role(member)
@@ -114,6 +124,9 @@ async def handle_reaction_remove(payload):
         print(f'➖ Usuário {payload.user_id} removeu reação da mensagem {payload.message_id}')
 
     guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        print(f'⚠️ Guild com ID {payload.guild_id} não encontrada!')
+        return
     member = guild.get_member(payload.user_id)
     if member:
         await update_user_role(member)
@@ -132,6 +145,9 @@ async def handle_message_delete(payload):
         print(f'🗑️ Mensagem {payload.message_id} foi apagada e removida do rastreamento.')
 
     guild = bot.get_guild(payload.guild_id)
+    if not guild:
+        print(f'⚠️ Guild com ID {payload.guild_id} não encontrada!')
+        return
     for member in guild.members:
         await update_user_role(member)
 
@@ -158,42 +174,59 @@ async def on_raw_reaction_remove(payload):
 async def on_raw_message_delete(payload):
     await handle_message_delete(payload)
 
+# --- VIEW PAGINADA PARA /STATUS ---
+
+class StatusPaginator(View):
+    def __init__(self, pages, author):
+        super().__init__(timeout=120)
+        self.pages = pages
+        self.author = author
+        self.index = 0
+
+    async def update_message(self, interaction):
+        await interaction.response.edit_message(embed=self.pages[self.index], view=self)
+
+    @discord.ui.button(label="⬅️ Anterior", style=discord.ButtonStyle.secondary)
+    async def previous(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ Apenas o autor do comando pode usar os botões.", ephemeral=True)
+        self.index = (self.index - 1) % len(self.pages)
+        await self.update_message(interaction)
+
+    @discord.ui.button(label="Próximo ➡️", style=discord.ButtonStyle.secondary)
+    async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
+        if interaction.user != self.author:
+            return await interaction.response.send_message("❌ Apenas o autor do comando pode usar os botões.", ephemeral=True)
+        self.index = (self.index + 1) % len(self.pages)
+        await self.update_message(interaction)
+
 # --- COMANDO /STATUS ---
 
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
     try:
         await interaction.response.defer(thinking=True)
-        followup_msg = await interaction.original_response()
-
-        etapas = [
-            "🔄 A processar status...",
-            "⏳ Etapa 1/3: Recolher mensagens monitoradas...",
-            "⏳ Etapa 2/3: Contar reações...",
-            "⏳ Etapa 3/3: Verificar membros e cargos...",
-            "✅ Gerando relatório final..."
-        ]
-        for etapa in etapas:
-            await followup_msg.edit(content=etapa)
-            await asyncio.sleep(0.5)
-
         guild = interaction.guild
         total_msgs = len(message_reactions)
         required_role = guild.get_role(REQUIRED_ROLE_ID)
         assigned_role = guild.get_role(ROLE_ID)
 
-        embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.green())
-        embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
+        # Página 1: Info geral
+        embed1 = discord.Embed(title="📊 Status Geral", color=discord.Color.green())
+        embed1.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
 
-        details = "\n".join(f"📝 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items())
-        embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
+        # Página 2: Reações por mensagem
+        details = "\n".join(f"📜 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items()) or "Nenhuma reação registrada"
+        embed2 = discord.Embed(title="📨 Reações por Mensagem", description=details, color=discord.Color.blurple())
 
+        # Página 3: Progresso dos membros
         membros_info = "\n".join(
             f"{'✅' if assigned_role in member.roles else '❌'} {member.display_name} - {sum(1 for users in message_reactions.values() if member.id in users)}/{total_msgs}"
             for member in sorted(guild.members, key=lambda m: m.display_name.lower())
         ) or "Nenhum membro encontrado."
-        embed.add_field(name=f"👥 Todos os Membros:", value=membros_info, inline=False)
+        embed3 = discord.Embed(title="👥 Progresso dos Membros", description=membros_info, color=discord.Color.orange())
 
+        # Página 4: Comparação de roles
         required_role_members = set(required_role.members) if required_role else set()
         assigned_role_members = set(assigned_role.members) if assigned_role else set()
 
@@ -204,22 +237,20 @@ async def status(interaction: discord.Interaction):
         def format_members(title, members_set):
             count = len(members_set)
             members_list = "\n".join(sorted((member.display_name for member in members_set), key=str.lower)) if members_set else "Nenhum"
-            return f"{title} ({count})", members_list
+            return title, f"{count} membros:\n{members_list}"
 
+        embed4 = discord.Embed(title="📋 Comparação de Cargos", color=discord.Color.purple())
         for title, members in [
-            format_members("✅ Membros com ambos roles", ambos),
-            format_members(f"❌ Membros apenas com {required_role.name if required_role else 'N/D'}", apenas_requisito),
-            format_members(f"ℹ️ Membros apenas com {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
+            format_members("✅ Com ambos os roles", ambos),
+            format_members(f"❌ Apenas {required_role.name if required_role else 'N/D'}", apenas_requisito),
+            format_members(f"ℹ️ Apenas {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
         ]:
-            embed.add_field(name=title, value=members, inline=False)
+            embed4.add_field(name=title, value=members, inline=False)
 
-        await followup_msg.edit(content=None, embed=embed)
-        print(f'📊 Comando /status solicitado por {interaction.user}')
+        pages = [embed1, embed2, embed3, embed4]
+        view = StatusPaginator(pages, interaction.user)
+        await interaction.followup.send(embed=pages[0], view=view)
 
-    except discord.errors.NotFound as e:
-        print(f"⚠️ Erro: interação não encontrada - {e}")
-    except discord.HTTPException as e:
-        print(f"⚠️ Erro HTTP: {e}")
     except Exception as e:
         print(f"⚠️ Erro inesperado: {e}")
         try:
