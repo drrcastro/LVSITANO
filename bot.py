@@ -26,6 +26,7 @@ message_reactions = {}
 # --- FUNÇÕES AUXILIARES ---
 
 async def check_user_reactions(user_id):
+    # Verifica se o usuário reagiu a todas as mensagens monitoradas
     for reactions in message_reactions.values():
         if user_id not in reactions:
             return False
@@ -68,10 +69,9 @@ async def initialize_reactions():
 
 async def update_all_roles():
     guild = bot.get_guild(GUILD_ID)
-    required_role = guild.get_role(REQUIRED_ROLE_ID)
-    if required_role:
-        for member in required_role.members:
-            await update_user_role(member)
+    # Atualiza cargo para todos os membros do guild
+    for member in guild.members:
+        await update_user_role(member)
 
 async def handle_on_ready():
     print(f'✅ Bot conectado como {bot.user}')
@@ -91,7 +91,6 @@ async def handle_reaction_add(payload):
 
     message_reactions.setdefault(payload.message_id, set()).add(payload.user_id)
     print(f'➕ Usuário {payload.user_id} adicionou reação na mensagem {payload.message_id}')
-    
     guild = bot.get_guild(payload.guild_id)
     member = guild.get_member(payload.user_id)
     if member:
@@ -104,7 +103,6 @@ async def handle_reaction_remove(payload):
     if payload.message_id in message_reactions:
         message_reactions[payload.message_id].discard(payload.user_id)
         print(f'➖ Usuário {payload.user_id} removeu reação da mensagem {payload.message_id}')
-    
     guild = bot.get_guild(payload.guild_id)
     member = guild.get_member(payload.user_id)
     if member:
@@ -124,10 +122,9 @@ async def handle_message_delete(payload):
         print(f'🗑️ Mensagem {payload.message_id} foi apagada e removida do rastreamento.')
 
     guild = bot.get_guild(payload.guild_id)
-    required_role = guild.get_role(REQUIRED_ROLE_ID)
-    if required_role:
-        for member in required_role.members:
-            await update_user_role(member)
+    # Atualiza novamente para todos os membros
+    for member in guild.members:
+        await update_user_role(member)
 
 # --- EVENTOS ---
 
@@ -157,11 +154,9 @@ async def on_raw_message_delete(payload):
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
     try:
-        # Acknowledge imediatamente a interação para evitar timeout
         await interaction.response.defer(thinking=True)
-        followup_msg = await interaction.original_response()
+        followup = await interaction.original_response()
 
-        # Simula uma barra de progresso com delays mais curtos
         etapas = [
             "🔄 A processar status...",
             "⏳ Etapa 1/3: Recolher mensagens monitoradas...",
@@ -170,65 +165,37 @@ async def status(interaction: discord.Interaction):
             "✅ Gerando relatório final..."
         ]
         for etapa in etapas:
-            await followup_msg.edit(content=etapa)
-            await asyncio.sleep(0.5)  # Delay reduzido (0.5 segundos)
+            await followup.edit(content=etapa)
+            await asyncio.sleep(0.5)
 
-        # Coleta dos dados para o relatório
         guild = interaction.guild
         total_msgs = len(message_reactions)
-        required_role = guild.get_role(REQUIRED_ROLE_ID)
         assigned_role = guild.get_role(ROLE_ID)
 
         embed = discord.Embed(title="📊 Status do Rastreamento", color=discord.Color.green())
         embed.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
 
-        details = "\n".join(f"📝 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items())
-        embed.add_field(name="📌 Reações por Mensagem", value=details or "Nenhuma reação registrada", inline=False)
+        detalhes_msgs = "\n".join(f"📝 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items())
+        embed.add_field(name="📌 Reações por Mensagem", value=detalhes_msgs or "Nenhuma reação registrada", inline=False)
 
-        if required_role:
-            membros_info = "\n".join(
-                f"{member.display_name} - {sum(1 for users in message_reactions.values() if member.id in users)}/{total_msgs}"
-                for member in sorted(required_role.members, key=lambda m: m.display_name.lower())
-            ) or "Nenhum membro com o role requisito encontrado."
-        else:
-            membros_info = "Role requisito não encontrado."
-        embed.add_field(name=f"👥 Membros {required_role.name if required_role else 'N/D'}:", value=membros_info, inline=False)
+        # Lista todos os membros do servidor
+        todos = sorted(guild.members, key=lambda m: m.display_name.lower())
+        membros_todos = []
+        for member in todos:
+            count = sum(1 for users in message_reactions.values() if member.id in users)
+            status = '✅' if assigned_role and assigned_role in member.roles else '❌'
+            membros_todos.append(f"{status} {member.display_name} - {count}/{total_msgs}")
+        embed.add_field(name="👥 Todos os Membros", value="\n".join(membros_todos) or "Nenhum membro encontrado", inline=False)
 
-        required_role_members = set(required_role.members) if required_role else set()
-        assigned_role_members = set(assigned_role.members) if assigned_role else set()
-
-        ambos = required_role_members & assigned_role_members
-        apenas_requisito = required_role_members - assigned_role_members
-        apenas_atribuido = assigned_role_members - required_role_members
-
-        def format_members(title, members_set):
-            count = len(members_set)
-            members_list = "\n".join(sorted((member.display_name for member in members_set), key=str.lower)) if members_set else "Nenhum"
-            return f"{title} ({count})", members_list
-
-        for title, members in [
-            format_members("✅ Membros com ambos roles", ambos),
-            format_members(f"❌ Membros apenas com {required_role.name if required_role else 'N/D'}", apenas_requisito),
-            format_members(f"ℹ️ Membros apenas com {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
-        ]:
-            embed.add_field(name=title, value=members, inline=False)
-
-        # Envia o embed final (substituindo o texto da mensagem de followup)
-        await followup_msg.edit(content=None, embed=embed)
+        await followup.edit(content=None, embed=embed)
         print(f'📊 Comando /status solicitado por {interaction.user}')
 
-    except discord.errors.NotFound as e:
-        print(f"⚠️ Erro: interação não encontrada - {e}")
-    except discord.HTTPException as e:
-        print(f"⚠️ Erro HTTP: {e}")
     except Exception as e:
-        print(f"⚠️ Erro inesperado: {e}")
+        print(f"⚠️ Erro no /status: {e}")
         try:
             await interaction.followup.send("❌ Ocorreu um erro ao processar o status.")
-        except Exception:
+        except:
             pass
-
-
 
 # --- INICIAR BOT ---
 bot.run(BOT_TOKEN)
