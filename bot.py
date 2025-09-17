@@ -219,14 +219,26 @@ async def status(interaction: discord.Interaction):
         details = "\n".join(f"📜 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items()) or "Nenhuma reação registrada"
         embed2 = discord.Embed(title="📨 Reações por Mensagem", description=details, color=discord.Color.blurple())
 
-        # Página 3: Progresso dos membros
-        membros_info = "\n".join(
-            f"{'✅' if assigned_role in member.roles else '❌'} {member.display_name} - {sum(1 for users in message_reactions.values() if member.id in users)}/{total_msgs}"
-            for member in sorted(guild.members, key=lambda m: m.display_name.lower())
-        ) or "Nenhum membro encontrado."
-        embed3 = discord.Embed(title="👥 Progresso dos Membros", description=membros_info, color=discord.Color.orange())
+        # Páginas 3-5: Progresso por grupos
+        villain_role = discord.utils.get(guild.roles, name="Villain")
+        robot_role = discord.utils.get(guild.roles, name="Robot")
 
-        # Página 4: Comparação de roles
+        def format_progress(members):
+            return "\n".join(
+                f"{'✅' if assigned_role in member.roles else '❌'} {member.display_name} - "
+                f"{sum(1 for users in message_reactions.values() if member.id in users)}/{total_msgs}"
+                for member in sorted(members, key=lambda m: m.display_name.lower())
+            ) or "Nenhum membro encontrado."
+
+        villains = [m for m in guild.members if villain_role in m.roles] if villain_role else []
+        robots = [m for m in guild.members if robot_role in m.roles] if robot_role else []
+        restantes = [m for m in guild.members if (villain_role not in m.roles and robot_role not in m.roles)]
+
+        embed3 = discord.Embed(title="👥 Progresso - Villains", description=format_progress(villains), color=discord.Color.red())
+        embed4 = discord.Embed(title="🤖 Progresso - Robots", description=format_progress(robots), color=discord.Color.blue())
+        embed5 = discord.Embed(title="👤 Progresso - Restantes", description=format_progress(restantes), color=discord.Color.orange())
+
+        # Página 6: Comparação de roles
         required_role_members = set(required_role.members) if required_role else set()
         assigned_role_members = set(assigned_role.members) if assigned_role else set()
 
@@ -239,15 +251,15 @@ async def status(interaction: discord.Interaction):
             members_list = "\n".join(sorted((member.display_name for member in members_set), key=str.lower)) if members_set else "Nenhum"
             return title, f"{count} membros:\n{members_list}"
 
-        embed4 = discord.Embed(title="📋 Comparação de Cargos", color=discord.Color.purple())
+        embed6 = discord.Embed(title="📋 Comparação de Cargos", color=discord.Color.purple())
         for title, members in [
             format_members("✅ Com ambos os roles", ambos),
             format_members(f"❌ Apenas {required_role.name if required_role else 'N/D'}", apenas_requisito),
             format_members(f"ℹ️ Apenas {assigned_role.name if assigned_role else 'N/D'}", apenas_atribuido)
         ]:
-            embed4.add_field(name=title, value=members, inline=False)
+            embed6.add_field(name=title, value=members, inline=False)
 
-        pages = [embed1, embed2, embed3, embed4]
+        pages = [embed1, embed2, embed3, embed4, embed5, embed6]
         view = StatusPaginator(pages, interaction.user)
         await interaction.followup.send(embed=pages[0], view=view)
 
