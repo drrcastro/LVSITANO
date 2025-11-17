@@ -343,13 +343,13 @@ async def status(interaction: discord.Interaction):
             pass
 
 # ---------- NEW: /least_active & /my_messages ----------
-@tree.command(name="least_active", description="Show members with the fewest messages for a month.", guild=discord.Object(id=GUILD_ID))
+@tree.command(name="atividade", description="Mostre os membros o menor número de mensagens em um mês.", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
-    limit="How many users to list (1-100, default 10).",
-    role="Only include members with this role (optional).",
-    month="Target month in YYYY-MM (default: current month).",
-    include_bots="Include bot accounts (default: False).",
-    public="Post publicly instead of ephemeral (default: False)."
+    limit="Quantos usuários listar (1-100, padrão 10).",
+    role="Inclua apenas membros com este Role (opcional).",
+    month="Mês a mostras em AAAA-MM (padrão: mês atual).",
+    include_bots="Incluir contas de bot (padrão: False).",
+    public="Publicar publicamente (padrão: False)."
 )
 async def least_active(
     interaction: discord.Interaction,
@@ -405,15 +405,16 @@ async def least_active(
     embed.set_footer(text=f"Month: {ym} • Include bots: {include_bots} • Role: {role.name if role else 'Any'}")
     await interaction.followup.send(embed=embed, ephemeral=not public)
 
-@tree.command(name="my_messages", description="Show your message count for the current month.", guild=discord.Object(id=GUILD_ID))
+@tree.command(name="mensagens", description="Mostra a sua contagem de mensagens para o mês atual.", guild=discord.Object(id=GUILD_ID))
 async def my_messages(interaction: discord.Interaction):
     guild = interaction.guild
     if guild is None:
         return await interaction.response.send_message("Use this in a server.", ephemeral=True)
     ym = get_year_month()
     c = get_counts_for_month(guild.id, ym).get(interaction.user.id, 0)
-    await interaction.response.send_message(f"You sent **{c}** message{'s' if c != 1 else ''} in **{ym}**.", ephemeral=True)
+    await interaction.response.send_message(f"Mandaste **{c}** mensagens em **{ym}**.", ephemeral=True)
 # ------------------------------------------------------
 
 # --- INICIAR BOT ---
 bot.run(BOT_TOKEN)
+
