@@ -345,9 +345,9 @@ async def status(interaction: discord.Interaction):
 # ---------- NEW: /least_active & /my_messages ----------
 @tree.command(name="atividade", description="Mostre os membros o menor número de mensagens em um mês.", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
-    limit="Quantos usuários listar (1-100, padrão 10).",
-    role="Inclua apenas membros com este Role (opcional).",
-    month="Mês a mostras em AAAA-MM (padrão: mês atual).",
+    limit="Quantos membros listar (1-100, padrão 10).",
+    role="Inclui apenas membros com este Role (opcional).",
+    month="Mês a mostrar em AAAA-MM (padrão: mês atual).",
     include_bots="Incluir contas de bot (padrão: False).",
     public="Publicar publicamente (padrão: False)."
 )
@@ -417,4 +417,5 @@ async def my_messages(interaction: discord.Interaction):
 
 # --- INICIAR BOT ---
 bot.run(BOT_TOKEN)
+
 
