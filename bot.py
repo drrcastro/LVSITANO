@@ -133,7 +133,6 @@ async def perform_full_sync():
         print(f'⚠️ Guild com ID {GUILD_ID} não encontrada para sync!')
         return
 
-    # Restrict completely to the specific channel
     channel = guild.get_channel(CHANNEL_ID)
     if not channel:
         print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado para sync!')
@@ -156,11 +155,12 @@ async def perform_full_sync():
         async for message in channel.history(limit=None):
             msg_count += 1
             
-            # Print progress every 100 messages so you know it's not stuck
+            # Print progress every 100 messages
             if msg_count % 100 == 0:
                 print(f"⏳ Processando histórico... ({msg_count} mensagens lidas)")
 
-            if not message.author.bot:
+            # Ignore bots AND system messages (pins, thread creations, joins)
+            if not message.author.bot and not message.is_system():
                 # Add to database counts
                 ym = get_year_month(message.created_at)
                 key = (guild.id, message.author.id, ym)
@@ -239,8 +239,8 @@ async def on_ready():
 
 @bot.event
 async def on_message(message: discord.Message):
-    # Track messages dynamically as they come in (only in the monitored channel to match sync logic)
-    if message.guild is not None and not message.author.bot:
+    # Track messages dynamically, ignoring bots and system messages
+    if message.guild is not None and not message.author.bot and not message.is_system():
         if message.channel.id == CHANNEL_ID:
             ym = get_year_month()
             increment_message_count(message.guild.id, message.author.id, ym)
@@ -258,13 +258,14 @@ async def on_raw_reaction_remove(payload):
 
 @bot.event
 async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
-    # Process reaction tracking removal
     await handle_message_delete(payload)
     
-    # Process database message decrement (Real-time syncing)
-    if payload.channel_id == CHANNEL_ID and payload.cached_message and not payload.cached_message.author.bot:
-        ym = get_year_month(payload.cached_message.created_at)
-        decrement_message_count(payload.guild_id, payload.cached_message.author.id, ym)
+    # Decrement only if it was a real message from a user
+    if payload.channel_id == CHANNEL_ID and payload.cached_message:
+        msg = payload.cached_message
+        if not msg.author.bot and not msg.is_system():
+            ym = get_year_month(msg.created_at)
+            decrement_message_count(payload.guild_id, msg.author.id, ym)
 
 # --- HANDLERS EXISTENTES ---
 async def handle_reaction_add(payload):
@@ -293,7 +294,7 @@ async def handle_reaction_remove(payload):
         await update_user_role(member)
 
 async def handle_new_message(message):
-    if message.guild and message.channel.id == CHANNEL_ID and not message.author.bot:
+    if message.guild and message.channel.id == CHANNEL_ID and not message.author.bot and not message.is_system():
         message_reactions[message.id] = set()
         print(f'📩 Nova mensagem adicionada para monitorização: {message.id}')
 
