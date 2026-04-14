@@ -1,9 +1,9 @@
 import asyncio
 import os
 import sqlite3
-from datetime import datetime, timezone  # <-- added timezone
+from datetime import datetime, timezone
 import discord
-from discord.ext import commands, tasks   # <-- added tasks
+from discord.ext import commands, tasks
 from discord import app_commands
 from discord.ui import View, Button
 from dotenv import load_dotenv
@@ -15,11 +15,10 @@ REQUIRED_ROLE_ID = int(os.getenv('DISCORD_REQUIRE_ROLE_ID'))
 CHANNEL_ID = int(os.getenv('DISCORD_CHANNEL_ID'))
 GUILD_ID = int(os.getenv('DISCORD_GUILD_ID'))
 
-# ---------- NEW: message counting storage ----------
+# ---------- DATABASE STORAGE ----------
 DB_PATH = "message_counts.sqlite3"
 
 def get_year_month(dt: datetime | None = None) -> str:
-    # Uses UTC by default. If you prefer local time, replace with datetime.now() or zoneinfo.
     dt = dt or datetime.now(timezone.utc)
     return dt.strftime("%Y-%m")
 
@@ -49,6 +48,22 @@ def increment_message_count(guild_id: int, user_id: int, year_month: str):
     conn.commit()
     conn.close()
 
+def decrement_message_count(guild_id: int, user_id: int, year_month: str):
+    """Decrements the user's message count, keeping a minimum of 0."""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        cur.execute("""
+            UPDATE message_counts 
+            SET count = MAX(0, count - 1)
+            WHERE guild_id = ? AND user_id = ? AND year_month = ?;
+        """, (guild_id, user_id, year_month))
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"⚠️ Erro no banco de dados ao decrementar: {e}")
+    finally:
+        conn.close()
+
 def get_counts_for_month(guild_id: int, year_month: str) -> dict:
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
@@ -72,7 +87,7 @@ tree = bot.tree
 
 message_reactions = {}
 
-# --- FUNÇÕES AUXILIARES EXISTENTES ---
+# --- FUNÇÕES AUXILIARES ---
 async def check_user_reactions(user_id):
     for reactions in message_reactions.values():
         if user_id not in reactions:
@@ -83,45 +98,24 @@ async def update_user_role(member):
     guild = member.guild
     role = guild.get_role(ROLE_ID)
     required_role = guild.get_role(REQUIRED_ROLE_ID)
+    
     if not role or not required_role:
         return
 
     if required_role not in member.roles:
         if role in member.roles:
             await member.remove_roles(role)
-            print(f'❌ {member} perdeu o cargo {role.name} (sem cargo requisito)')
+            print(f'❌ {member.display_name} perdeu o cargo {role.name} (sem cargo requisito)')
         return
 
     if await check_user_reactions(member.id):
         if role not in member.roles:
             await member.add_roles(role)
-            print(f'✅ {member} recebeu o cargo {role.name}')
+            print(f'✅ {member.display_name} recebeu o cargo {role.name}')
     else:
         if role in member.roles:
             await member.remove_roles(role)
-            print(f'❌ {member} perdeu o cargo {role.name}')
-
-async def initialize_reactions():
-    await bot.wait_until_ready()
-    guild = bot.get_guild(GUILD_ID)
-    if not guild:
-        print(f'⚠️ Guild com ID {GUILD_ID} não encontrada!')
-        return
-
-    channel = guild.get_channel(CHANNEL_ID)
-    if not channel:
-        print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado!')
-        return
-
-    print('Inicializando rastreamento de mensagens e reações...')
-    message_reactions.clear()
-    async for message in channel.history(limit=100):
-        message_reactions[message.id] = set()
-        for reaction in message.reactions:
-            async for user in reaction.users():
-                if not user.bot:
-                    message_reactions[message.id].add(user.id)
-    print(f'✅ Rastreamento inicializado: {len(message_reactions)} mensagens registradas.')
+            print(f'❌ {member.display_name} perdeu o cargo {role.name}')
 
 async def update_all_roles():
     guild = bot.get_guild(GUILD_ID)
@@ -131,7 +125,64 @@ async def update_all_roles():
     for member in guild.members:
         await update_user_role(member)
 
-# ---------- NEW: monthly data housekeeping (optional) ----------
+async def perform_full_sync():
+    """Resets DB counts for the server and rebuilds everything from message history."""
+    await bot.wait_until_ready()
+    guild = bot.get_guild(GUILD_ID)
+    if not guild:
+        print(f'⚠️ Guild com ID {GUILD_ID} não encontrada para sync!')
+        return
+
+    print('🔄 Iniciando resync completo do servidor...')
+    
+    # 1. Clear database for this specific guild to avoid duplicate counts
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute("DELETE FROM message_counts WHERE guild_id = ?", (GUILD_ID,))
+    conn.commit()
+    conn.close()
+
+    db_batch = {}
+    message_reactions.clear()
+    
+    # 2. Iterate through all text channels to rebuild counts
+    # (And map reactions if it's the specific CHANNEL_ID)
+    for text_channel in guild.text_channels:
+        try:
+            async for message in text_channel.history(limit=None):
+                # Count ALL messages in the server for the database
+                if not message.author.bot:
+                    ym = get_year_month(message.created_at)
+                    key = (guild.id, message.author.id, ym)
+                    db_batch[key] = db_batch.get(key, 0) + 1
+                    
+                # Map reactions ONLY if it's the monitored channel
+                if text_channel.id == CHANNEL_ID:
+                    message_reactions[message.id] = set()
+                    for reaction in message.reactions:
+                        async for user in reaction.users():
+                            if not user.bot:
+                                message_reactions[message.id].add(user.id)
+        except discord.Forbidden:
+            continue # Skip channels the bot doesn't have permission to read
+            
+    # 3. Batch insert the newly calculated counts into the database (Fast)
+    if db_batch:
+        conn = sqlite3.connect(DB_PATH)
+        cur = conn.cursor()
+        for (g_id, u_id, ym), cnt in db_batch.items():
+            cur.execute("""
+                INSERT INTO message_counts (guild_id, user_id, year_month, count)
+                VALUES (?, ?, ?, ?)
+            """, (g_id, u_id, ym, cnt))
+        conn.commit()
+        conn.close()
+        
+    print(f'✅ Resync concluído! Contadores atualizados e {len(message_reactions)} mensagens monitoradas para reações.')
+    
+    # 4. Update roles based on the newly synced data
+    await update_all_roles()
+
+# ---------- HOUSEKEEPING ----------
 @tasks.loop(hours=24)
 async def purge_old_months():
     """Keep only the last 12 months of data to keep the DB compact."""
@@ -139,23 +190,21 @@ async def purge_old_months():
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         now = datetime.now(timezone.utc)
-        cutoff = f"{now.year - 1}-{now.month:02d}"  # 12 months ago (lexicographically safe in YYYY-MM)
+        cutoff = f"{now.year - 1}-{now.month:02d}"  # 12 months ago
         cur.execute("DELETE FROM message_counts WHERE year_month < ?;", (cutoff,))
         conn.commit()
         conn.close()
     except Exception as e:
-        print(f"[purge_old_months] Error: {e}")
+        print(f"⚠️ [purge_old_months] Error: {e}")
 
 @purge_old_months.before_loop
 async def before_purge():
     await bot.wait_until_ready()
-# ---------------------------------------------------------------
 
 async def handle_on_ready():
     print(f'✅ Bot conectado como {bot.user}')
     await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.watching, name="the Notes"))
 
-    # --- NEW: init DB + start housekeeping
     init_db()
     if not purge_old_months.is_running():
         purge_old_months.start()
@@ -164,11 +213,10 @@ async def handle_on_ready():
     for g in bot.guilds:
         print(f"- {g.name} (ID: {g.id})")
 
-    await initialize_reactions()
-    await update_all_roles()
+    # Perform the full sync every time the bot starts
+    await perform_full_sync()
 
     try:
-        # Sync only to your guild for faster updates
         synced = await tree.sync(guild=discord.Object(id=GUILD_ID))
         print(f'✅ {len(synced)} comandos de barra sincronizados!')
     except Exception as e:
@@ -181,13 +229,11 @@ async def on_ready():
 
 @bot.event
 async def on_message(message: discord.Message):
-    # --- NEW: count every member's messages (guild-wide) ---
+    # Track messages dynamically as they come in
     if message.guild is not None and not message.author.bot:
         ym = get_year_month()
         increment_message_count(message.guild.id, message.author.id, ym)
-    # -------------------------------------------------------
 
-    # Existing logic: track only messages in the monitored channel for reactions/roles
     await handle_new_message(message)
     await bot.process_commands(message)
 
@@ -200,8 +246,14 @@ async def on_raw_reaction_remove(payload):
     await handle_reaction_remove(payload)
 
 @bot.event
-async def on_raw_message_delete(payload):
+async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
+    # Process reaction tracking removal
     await handle_message_delete(payload)
+    
+    # Process database message decrement (Real-time syncing)
+    if payload.cached_message and not payload.cached_message.author.bot:
+        ym = get_year_month(payload.cached_message.created_at)
+        decrement_message_count(payload.guild_id, payload.cached_message.author.id, ym)
 
 # --- HANDLERS EXISTENTES ---
 async def handle_reaction_add(payload):
@@ -211,7 +263,6 @@ async def handle_reaction_add(payload):
     print(f'➕ Usuário {payload.user_id} adicionou reação na mensagem {payload.message_id}')
     guild = bot.get_guild(payload.guild_id)
     if not guild:
-        print(f'⚠️ Guild com ID {payload.guild_id} não encontrada!')
         return
     member = guild.get_member(payload.user_id)
     if member:
@@ -225,14 +276,12 @@ async def handle_reaction_remove(payload):
     print(f'➖ Usuário {payload.user_id} removeu reação da mensagem {payload.message_id}')
     guild = bot.get_guild(payload.guild_id)
     if not guild:
-        print(f'⚠️ Guild com ID {payload.guild_id} não encontrada!')
         return
     member = guild.get_member(payload.user_id)
     if member:
         await update_user_role(member)
 
 async def handle_new_message(message):
-    # Only for the reaction-tracking feature
     if message.guild and message.channel.id == CHANNEL_ID and not message.author.bot:
         message_reactions[message.id] = set()
         print(f'📩 Nova mensagem adicionada para monitorização: {message.id}')
@@ -242,10 +291,9 @@ async def handle_message_delete(payload):
         return
     if payload.message_id in message_reactions:
         del message_reactions[payload.message_id]
-    print(f'🗑️ Mensagem {payload.message_id} foi apagada e removida do rastreamento.')
+        print(f'🗑️ Mensagem {payload.message_id} foi apagada e removida do rastreamento de reações.')
     guild = bot.get_guild(payload.guild_id)
     if not guild:
-        print(f'⚠️ Guild com ID {payload.guild_id} não encontrada!')
         return
     for member in guild.members:
         await update_user_role(member)
@@ -275,7 +323,7 @@ class StatusPaginator(View):
         self.index = (self.index + 1) % len(self.pages)
         await self.update_message(interaction)
 
-# --- COMANDO /STATUS (inalterado) ---
+# --- COMANDOS ---
 @tree.command(name="status", description="Mostra o status das mensagens, reações e roles dos membros", guild=discord.Object(id=GUILD_ID))
 async def status(interaction: discord.Interaction):
     try:
@@ -285,7 +333,6 @@ async def status(interaction: discord.Interaction):
         required_role = guild.get_role(REQUIRED_ROLE_ID)
         assigned_role = guild.get_role(ROLE_ID)
 
-        # Página 1: Comparação de roles
         required_role_members = set(required_role.members) if required_role else set()
         assigned_role_members = set(assigned_role.members) if assigned_role else set()
         ambos = required_role_members & assigned_role_members
@@ -305,7 +352,6 @@ async def status(interaction: discord.Interaction):
         ]:
             embed6.add_field(name=title, value=members, inline=False)
 
-        # Páginas seguintes: progresso dos grupos
         villain_role = discord.utils.get(guild.roles, name="Villain")
         robot_role = discord.utils.get(guild.roles, name="Robot")
 
@@ -324,11 +370,9 @@ async def status(interaction: discord.Interaction):
         embed4 = discord.Embed(title="🤖 Progresso - Robots", description=format_progress(robots), color=discord.Color.blue())
         embed5 = discord.Embed(title="👤 Progresso - Restantes", description=format_progress(restantes), color=discord.Color.orange())
 
-        # Status geral
         embed1 = discord.Embed(title="📊 Status Geral", color=discord.Color.green())
         embed1.add_field(name="📌 Mensagens Monitoradas", value=str(total_msgs), inline=False)
 
-        # Reações por mensagem
         details = "\n".join(f"📝 ID {msg_id}: {len(users)} reações" for msg_id, users in message_reactions.items()) or "Nenhuma reação registrada"
         embed2 = discord.Embed(title="📨 Reações por Mensagem", description=details, color=discord.Color.blurple())
 
@@ -342,7 +386,6 @@ async def status(interaction: discord.Interaction):
         except Exception:
             pass
 
-# ---------- NEW: /least_active & /my_messages ----------
 @tree.command(name="atividade", description="Mostre os membros o menor número de mensagens em um mês.", guild=discord.Object(id=GUILD_ID))
 @app_commands.describe(
     limit="Quantos membros listar (1-100, padrão 10).",
@@ -365,7 +408,6 @@ async def least_active(
     if guild is None:
         return await interaction.followup.send("Use this command in a server.", ephemeral=True)
 
-    # Validate/normalize month
     if month:
         try:
             dt = datetime.strptime(month, "%Y-%m")
@@ -377,7 +419,6 @@ async def least_active(
 
     counts = get_counts_for_month(guild.id, ym)
 
-    # Ensure member cache for role filtering
     if not guild.chunked:
         await guild.chunk(cache=True)
 
@@ -413,9 +454,6 @@ async def my_messages(interaction: discord.Interaction):
     ym = get_year_month()
     c = get_counts_for_month(guild.id, ym).get(interaction.user.id, 0)
     await interaction.response.send_message(f"Mandaste **{c}** mensagens em **{ym}**.", ephemeral=True)
-# ------------------------------------------------------
 
 # --- INICIAR BOT ---
 bot.run(BOT_TOKEN)
-
-
