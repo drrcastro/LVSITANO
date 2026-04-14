@@ -126,14 +126,20 @@ async def update_all_roles():
         await update_user_role(member)
 
 async def perform_full_sync():
-    """Resets DB counts for the server and rebuilds everything from message history."""
+    """Resets DB counts and rebuilds everything ONLY from the monitored channel."""
     await bot.wait_until_ready()
     guild = bot.get_guild(GUILD_ID)
     if not guild:
         print(f'⚠️ Guild com ID {GUILD_ID} não encontrada para sync!')
         return
 
-    print('🔄 Iniciando resync completo do servidor...')
+    # Restrict completely to the specific channel
+    channel = guild.get_channel(CHANNEL_ID)
+    if not channel:
+        print(f'⚠️ Canal com ID {CHANNEL_ID} não encontrado para sync!')
+        return
+
+    print(f'🔄 Iniciando resync restrito ao canal: {channel.name}...')
     
     # 1. Clear database for this specific guild to avoid duplicate counts
     conn = sqlite3.connect(DB_PATH)
@@ -144,28 +150,32 @@ async def perform_full_sync():
     db_batch = {}
     message_reactions.clear()
     
-    # 2. Iterate through all text channels to rebuild counts
-    # (And map reactions if it's the specific CHANNEL_ID)
-    for text_channel in guild.text_channels:
-        try:
-            async for message in text_channel.history(limit=None):
-                # Count ALL messages in the server for the database
-                if not message.author.bot:
-                    ym = get_year_month(message.created_at)
-                    key = (guild.id, message.author.id, ym)
-                    db_batch[key] = db_batch.get(key, 0) + 1
-                    
-                # Map reactions ONLY if it's the monitored channel
-                if text_channel.id == CHANNEL_ID:
-                    message_reactions[message.id] = set()
-                    for reaction in message.reactions:
-                        async for user in reaction.users():
-                            if not user.bot:
-                                message_reactions[message.id].add(user.id)
-        except discord.Forbidden:
-            continue # Skip channels the bot doesn't have permission to read
+    # 2. Iterate ONLY through the specific channel history
+    try:
+        msg_count = 0
+        async for message in channel.history(limit=None):
+            msg_count += 1
             
-    # 3. Batch insert the newly calculated counts into the database (Fast)
+            # Print progress every 100 messages so you know it's not stuck
+            if msg_count % 100 == 0:
+                print(f"⏳ Processando histórico... ({msg_count} mensagens lidas)")
+
+            if not message.author.bot:
+                # Add to database counts
+                ym = get_year_month(message.created_at)
+                key = (guild.id, message.author.id, ym)
+                db_batch[key] = db_batch.get(key, 0) + 1
+                
+                # Map reactions
+                message_reactions[message.id] = set()
+                for reaction in message.reactions:
+                    async for user in reaction.users():
+                        if not user.bot:
+                            message_reactions[message.id].add(user.id)
+    except discord.Forbidden:
+        print(f"⚠️ O bot não tem permissão para ler o histórico do canal {channel.name}!")
+            
+    # 3. Batch insert the newly calculated counts into the database
     if db_batch:
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
@@ -177,7 +187,7 @@ async def perform_full_sync():
         conn.commit()
         conn.close()
         
-    print(f'✅ Resync concluído! Contadores atualizados e {len(message_reactions)} mensagens monitoradas para reações.')
+    print(f'✅ Resync concluído! {msg_count} mensagens totais analisadas no canal.')
     
     # 4. Update roles based on the newly synced data
     await update_all_roles()
@@ -229,10 +239,11 @@ async def on_ready():
 
 @bot.event
 async def on_message(message: discord.Message):
-    # Track messages dynamically as they come in
+    # Track messages dynamically as they come in (only in the monitored channel to match sync logic)
     if message.guild is not None and not message.author.bot:
-        ym = get_year_month()
-        increment_message_count(message.guild.id, message.author.id, ym)
+        if message.channel.id == CHANNEL_ID:
+            ym = get_year_month()
+            increment_message_count(message.guild.id, message.author.id, ym)
 
     await handle_new_message(message)
     await bot.process_commands(message)
@@ -251,7 +262,7 @@ async def on_raw_message_delete(payload: discord.RawMessageDeleteEvent):
     await handle_message_delete(payload)
     
     # Process database message decrement (Real-time syncing)
-    if payload.cached_message and not payload.cached_message.author.bot:
+    if payload.channel_id == CHANNEL_ID and payload.cached_message and not payload.cached_message.author.bot:
         ym = get_year_month(payload.cached_message.created_at)
         decrement_message_count(payload.guild_id, payload.cached_message.author.id, ym)
 
